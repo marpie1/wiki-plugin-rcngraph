@@ -4,7 +4,7 @@
     {
       "type": "paragraph",
       "id": "f3a8d291b4c56e17",
-      "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. The wiki page title is passed to the tool as the default diagram name and appears in the browser tab."
+      "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup."
     },
     {
       "type": "paragraph",
@@ -14,7 +14,7 @@
     {
       "type": "paragraph",
       "id": "c1d2e3f4a5b60001",
-      "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. VSM (Viable System Model): recursive governance structure following Stafford Beer. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: reifiable RDF-style triples with meta-edges for knowledge graph authoring."
+      "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
     },
     {
       "type": "paragraph",
@@ -46,7 +46,7 @@
       "item": {
         "type": "paragraph",
         "id": "f3a8d291b4c56e17",
-        "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. The wiki page title is passed to the tool as the default diagram name and appears in the browser tab."
+        "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup."
       },
       "date": 1782864001000
     },
@@ -68,7 +68,7 @@
       "item": {
         "type": "paragraph",
         "id": "c1d2e3f4a5b60001",
-        "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. VSM (Viable System Model): recursive governance structure following Stafford Beer. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: reifiable RDF-style triples with meta-edges for knowledge graph authoring."
+        "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
       },
       "date": 1782864003000
     },
