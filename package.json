@@ -1,0 +1,10 @@
+{
+  "name": "wiki-plugin-rcngraph",
+  "version": "0.1.2",
+  "description": "Federated Wiki - RCN Graph Plug-in",
+  "keywords": ["wiki", "federated wiki", "plugin", "rcn", "graph"],
+  "author": "RCN Network <rcn@relocalizecreativity.net>",
+  "license": "MIT",
+  "main": "index.js",
+  "files": ["client/rcngraph.js", "client/rcn-graph.js", "factory.json", "index.js"]
+}
