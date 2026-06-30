@@ -1,6 +1,6 @@
 {
   "name": "wiki-plugin-rcngraph",
-  "version": "0.1.5",
+  "version": "0.1.6",
   "description": "Federated Wiki - RCN Graph Plug-in",
   "keywords": ["wiki", "federated wiki", "plugin", "rcn", "graph"],
   "author": "RCN Network <rcn@relocalizecreativity.net>",

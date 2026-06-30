@@ -9,12 +9,12 @@
     {
       "type": "paragraph",
       "id": "2e7c9f04a3b8d651",
-      "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
+      "text": "Create an item using the factory. Click Open Graph Tool to open the tool. Use -> Item to save the diagram as an SVG preview back into the wiki item. Use -> Wiki to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
     },
     {
       "type": "paragraph",
       "id": "c1d2e3f4a5b60001",
-      "text": "**Diagram types:** **CLD** (Causal Loop) — map feedback loops and system dynamics. **EIP** (Enriched Influence Pattern) — influence networks with stakeholders, flows, and interventions. **OPM** (Object-Process Methodology) — system structure and process using Dov Dori's ISO 19450 standard; generates OPL sentences and Cypher export. **VSM** (Viable System Model) — recursive governance structure following Stafford Beer. **NRM** (Neighbourhood Risk Management) — incident and risk analysis. **Wardley** — Wardley mapping on an evolution/visibility canvas. **Triples** — reifiable RDF-style triples with meta-edges for knowledge graph authoring."
+      "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. VSM (Viable System Model): recursive governance structure following Stafford Beer. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: reifiable RDF-style triples with meta-edges for knowledge graph authoring."
     },
     {
       "type": "paragraph",
@@ -57,7 +57,7 @@
       "item": {
         "type": "paragraph",
         "id": "2e7c9f04a3b8d651",
-        "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
+        "text": "Create an item using the factory. Click Open Graph Tool to open the tool. Use -> Item to save the diagram as an SVG preview back into the wiki item. Use -> Wiki to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
       },
       "date": 1782864002000
     },
@@ -68,7 +68,7 @@
       "item": {
         "type": "paragraph",
         "id": "c1d2e3f4a5b60001",
-        "text": "**Diagram types:** **CLD** (Causal Loop) — map feedback loops and system dynamics. **EIP** (Enriched Influence Pattern) — influence networks with stakeholders, flows, and interventions. **OPM** (Object-Process Methodology) — system structure and process using Dov Dori's ISO 19450 standard; generates OPL sentences and Cypher export. **VSM** (Viable System Model) — recursive governance structure following Stafford Beer. **NRM** (Neighbourhood Risk Management) — incident and risk analysis. **Wardley** — Wardley mapping on an evolution/visibility canvas. **Triples** — reifiable RDF-style triples with meta-edges for knowledge graph authoring."
+        "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. VSM (Viable System Model): recursive governance structure following Stafford Beer. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: reifiable RDF-style triples with meta-edges for knowledge graph authoring."
       },
       "date": 1782864003000
     },
