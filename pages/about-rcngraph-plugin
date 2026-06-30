@@ -4,12 +4,22 @@
     {
       "type": "paragraph",
       "id": "f3a8d291b4c56e17",
-      "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. Supported diagram types: Causal Loop (CLD), Influence (EIP), Object-Process (OPM), Viable System (VSM), and Neighbourhood Risk Management (NRM)."
+      "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. The wiki page title is passed to the tool as the default diagram name and appears in the browser tab."
     },
     {
       "type": "paragraph",
       "id": "2e7c9f04a3b8d651",
-      "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page with node labels as internal wiki links. The wiki page title is passed to the tool as the default diagram name."
+      "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
+    },
+    {
+      "type": "paragraph",
+      "id": "c1d2e3f4a5b60001",
+      "text": "**Diagram types:** **CLD** (Causal Loop) — map feedback loops and system dynamics. **EIP** (Enriched Influence Pattern) — influence networks with stakeholders, flows, and interventions. **OPM** (Object-Process Methodology) — system structure and process using Dov Dori's ISO 19450 standard; generates OPL sentences and Cypher export. **VSM** (Viable System Model) — recursive governance structure following Stafford Beer. **NRM** (Neighbourhood Risk Management) — incident and risk analysis. **Wardley** — Wardley mapping on an evolution/visibility canvas. **Triples** — reifiable RDF-style triples with meta-edges for knowledge graph authoring."
+    },
+    {
+      "type": "paragraph",
+      "id": "d2e3f4a5b6c70002",
+      "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes."
     },
     {
       "type": "rcngraph",
@@ -36,7 +46,7 @@
       "item": {
         "type": "paragraph",
         "id": "f3a8d291b4c56e17",
-        "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. Supported diagram types: Causal Loop (CLD), Influence (EIP), Object-Process (OPM), Viable System (VSM), and Neighbourhood Risk Management (NRM)."
+        "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. The wiki page title is passed to the tool as the default diagram name and appears in the browser tab."
       },
       "date": 1782864001000
     },
@@ -47,20 +57,42 @@
       "item": {
         "type": "paragraph",
         "id": "2e7c9f04a3b8d651",
-        "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page with node labels as internal wiki links. The wiki page title is passed to the tool as the default diagram name."
+        "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
       },
       "date": 1782864002000
     },
     {
       "type": "add",
-      "id": "8d4e2a7f1c9b3065",
+      "id": "c1d2e3f4a5b60001",
       "after": "2e7c9f04a3b8d651",
+      "item": {
+        "type": "paragraph",
+        "id": "c1d2e3f4a5b60001",
+        "text": "**Diagram types:** **CLD** (Causal Loop) — map feedback loops and system dynamics. **EIP** (Enriched Influence Pattern) — influence networks with stakeholders, flows, and interventions. **OPM** (Object-Process Methodology) — system structure and process using Dov Dori's ISO 19450 standard; generates OPL sentences and Cypher export. **VSM** (Viable System Model) — recursive governance structure following Stafford Beer. **NRM** (Neighbourhood Risk Management) — incident and risk analysis. **Wardley** — Wardley mapping on an evolution/visibility canvas. **Triples** — reifiable RDF-style triples with meta-edges for knowledge graph authoring."
+      },
+      "date": 1782864003000
+    },
+    {
+      "type": "add",
+      "id": "d2e3f4a5b6c70002",
+      "after": "c1d2e3f4a5b60001",
+      "item": {
+        "type": "paragraph",
+        "id": "d2e3f4a5b6c70002",
+        "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes."
+      },
+      "date": 1782864004000
+    },
+    {
+      "type": "add",
+      "id": "8d4e2a7f1c9b3065",
+      "after": "d2e3f4a5b6c70002",
       "item": {
         "type": "rcngraph",
         "id": "8d4e2a7f1c9b3065",
         "text": ""
       },
-      "date": 1782864003000
+      "date": 1782864005000
     },
     {
       "type": "add",
@@ -71,7 +103,7 @@
         "id": "4b6f8e3d9c2a1705",
         "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [[https://github.com/marpie1/wiki-plugin-rcngraph]]. Published on npm as wiki-plugin-rcngraph."
       },
-      "date": 1782864004000
+      "date": 1782864006000
     }
   ]
 }
