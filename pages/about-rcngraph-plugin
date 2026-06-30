@@ -1,0 +1,77 @@
+{
+  "title": "About Rcngraph Plugin",
+  "story": [
+    {
+      "type": "paragraph",
+      "id": "f3a8d291b4c56e17",
+      "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. Supported diagram types: Causal Loop (CLD), Influence (EIP), Object-Process (OPM), Viable System (VSM), and Neighbourhood Risk Management (NRM)."
+    },
+    {
+      "type": "paragraph",
+      "id": "2e7c9f04a3b8d651",
+      "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page with node labels as internal wiki links. The wiki page title is passed to the tool as the default diagram name."
+    },
+    {
+      "type": "rcngraph",
+      "id": "8d4e2a7f1c9b3065",
+      "text": ""
+    },
+    {
+      "type": "paragraph",
+      "id": "4b6f8e3d9c2a1705",
+      "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [[https://github.com/marpie1/wiki-plugin-rcngraph]]. Published on npm as wiki-plugin-rcngraph."
+    }
+  ],
+  "journal": [
+    {
+      "type": "create",
+      "item": {
+        "title": "About Rcngraph Plugin"
+      },
+      "date": 1782864000000
+    },
+    {
+      "type": "add",
+      "id": "f3a8d291b4c56e17",
+      "item": {
+        "type": "paragraph",
+        "id": "f3a8d291b4c56e17",
+        "text": "The Rcngraph plugin opens the RCN Graph Diagramming Tool in a full popup window linked to the wiki lineup. Supported diagram types: Causal Loop (CLD), Influence (EIP), Object-Process (OPM), Viable System (VSM), and Neighbourhood Risk Management (NRM)."
+      },
+      "date": 1782864001000
+    },
+    {
+      "type": "add",
+      "id": "2e7c9f04a3b8d651",
+      "after": "f3a8d291b4c56e17",
+      "item": {
+        "type": "paragraph",
+        "id": "2e7c9f04a3b8d651",
+        "text": "Create an item using the factory. Click **Open Graph Tool ↗** to open the tool. Use **→ Item** to save the diagram as an SVG preview back into the wiki item. Use **→ Wiki** to send the diagram to the lineup as a ghost page with node labels as internal wiki links. The wiki page title is passed to the tool as the default diagram name."
+      },
+      "date": 1782864002000
+    },
+    {
+      "type": "add",
+      "id": "8d4e2a7f1c9b3065",
+      "after": "2e7c9f04a3b8d651",
+      "item": {
+        "type": "rcngraph",
+        "id": "8d4e2a7f1c9b3065",
+        "text": ""
+      },
+      "date": 1782864003000
+    },
+    {
+      "type": "add",
+      "id": "4b6f8e3d9c2a1705",
+      "after": "8d4e2a7f1c9b3065",
+      "item": {
+        "type": "paragraph",
+        "id": "4b6f8e3d9c2a1705",
+        "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [[https://github.com/marpie1/wiki-plugin-rcngraph]]. Published on npm as wiki-plugin-rcngraph."
+      },
+      "date": 1782864004000
+    }
+  ]
+}
