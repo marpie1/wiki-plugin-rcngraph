@@ -1,6 +1,11 @@
 (function () {
 
-  const GRAPH_URL = 'https://marc.relocalizecreativity.net/assets/Drag/graph-tool-v22.html'
+  // Kept in step with client/rcngraph.js — farm sites are alice.localhost etc., so
+  // match the suffix rather than the bare hostname.
+  const LOCAL = /(^|\.)localhost$/.test(window.location.hostname)
+  const GRAPH_URL = LOCAL
+    ? 'http://localhost:8765/tools/graph-tool-v22.html'
+    : 'https://marc.relocalizecreativity.net/assets/Drag/graph-tool-v22.html'
   const WINDOW_NAME = 'rcngraph'
 
   let pendingItem = null
@@ -23,7 +28,7 @@
       $item.append(`
         <div style="background-color:#eee;padding:15px;text-align:center;">
           <p style="font-weight:bold;margin:0 0 6px;">RCN Graph Tool</p>
-          <p style="color:#666;font-size:0.85em;margin:0 0 12px;">CLD · EIP · OPM · VSM · NRM</p>
+          <p style="color:#666;font-size:0.85em;margin:0 0 12px;">CLD · EIP · NRM · Trace · Wardley · OPM · SFD · LOP · VSM</p>
           <button class="open-graph" style="cursor:pointer;">Open Graph Tool ↗</button>
         </div>
       `)
@@ -34,7 +39,37 @@
     renderContent($item, item)
   }
 
+
+  // ⓘ — this plugin's About page in one click. FedWiki opens it with Cmd/Ctrl-I,
+  // but only from the item's text editor, which people seldom open when the real
+  // work happens elsewhere. Redraws empty the item, so the mark puts itself back.
+  function aboutMark ($item, type) {
+    const el = $item.get(0)
+    if (!el || el.__aboutMark) return
+    el.__aboutMark = true
+    if (getComputedStyle(el).position === 'static') el.style.position = 'relative'
+    const add = () => {
+      if (el.querySelector(':scope > .rcn-about')) return
+      const a = document.createElement('a')
+      a.className = 'rcn-about'
+      a.href = '/view/about-' + type + '-plugin'
+      a.title = 'About this plugin'
+      a.textContent = 'ⓘ'
+      a.style.cssText = 'position:absolute;top:0;right:-18px;z-index:1000;font:15px/1 system-ui,sans-serif;color:#64748b;text-decoration:none;cursor:pointer;background:rgba(255,255,255,.75);border-radius:50%;padding:1px 2px'
+      a.addEventListener('click', e => {
+        e.preventDefault()
+        e.stopPropagation()
+        wiki.doInternalLink('about ' + type + ' plugin', $item.parents('.page:first'))
+      })
+      a.addEventListener('dblclick', e => e.stopPropagation())
+      el.appendChild(a)
+    }
+    add()
+    new MutationObserver(add).observe(el, { childList: true })
+  }
+
   function bind($item, item) {
+    aboutMark($item, 'rcngraph')
     $item.on('click', '.open-graph, .edit-graph', () => {
       pendingItem = item
       pending$item = $item

@@ -9,17 +9,17 @@
     {
       "type": "paragraph",
       "id": "2e7c9f04a3b8d651",
-      "text": "Create an item using the factory. Click Open Graph Tool to open the tool. Use -> Item to save the diagram as an SVG preview back into the wiki item. Use -> Wiki to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
+      "text": "Create an item using the factory. Click Open Graph Tool to open the tool. Use -> Item to save the diagram as an SVG preview back into the wiki item \u2014 node labels in that preview are clickable internal wiki links, and the graph JSON rides along so Edit in Graph Tool reopens the real model. Use -> Wiki to send the diagram to the lineup as a ghost page. Both follow Ward Cunningham's Enrich Any SVG pattern."
     },
     {
       "type": "paragraph",
       "id": "c1d2e3f4a5b60001",
-      "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
+      "text": "Diagram types \u2014 CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. NRM (Neighbourhood Risk Management): incident and risk analysis on the Tripod Beta pattern. Trace: follow a path through an existing graph. Wardley: Wardley mapping on an evolution/visibility canvas. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. SFD (Stock and Flow): stocks, valves, auxiliaries and clouds in the Stella idiom, with XMILE export. LOP (Linkage of Processes): the Deming / API organization-as-a-system map. VSM (Value Stream Mapping): Cindy Jimmerson's healthcare value stream \u2014 four flows in lanes, storm bursts, and a computed sawtooth giving lead time, value-added time and the ratio between them, with a one-click handoff that seeds an A3. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
     },
     {
       "type": "paragraph",
       "id": "d2e3f4a5b6c70002",
-      "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes."
+      "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. A model can also be opened straight from a URL with ?url=, including an RCN Substrate subgraph projection. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes. A mode\u2019s backdrop \u2014 EIP columns, Wardley grid, LOP bands, VSM lanes and sawtooth \u2014 is drawn inside the SVG, so it travels into the wiki item and out again; save while still in that mode, because the backdrop only draws there."
     },
     {
       "type": "rcngraph",
@@ -29,7 +29,7 @@
     {
       "type": "paragraph",
       "id": "4b6f8e3d9c2a1705",
-      "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [[https://github.com/marpie1/wiki-plugin-rcngraph]]. Published on npm as wiki-plugin-rcngraph."
+      "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
     }
   ],
   "journal": [
@@ -57,7 +57,7 @@
       "item": {
         "type": "paragraph",
         "id": "2e7c9f04a3b8d651",
-        "text": "Create an item using the factory. Click Open Graph Tool to open the tool. Use -> Item to save the diagram as an SVG preview back into the wiki item. Use -> Wiki to send the diagram to the lineup as a ghost page — node labels become clickable internal wiki links, following Ward Cunningham's Enrich Any SVG pattern."
+        "text": "Create an item using the factory. Click Open Graph Tool to open the tool. Use -> Item to save the diagram as an SVG preview back into the wiki item \u2014 node labels in that preview are clickable internal wiki links, and the graph JSON rides along so Edit in Graph Tool reopens the real model. Use -> Wiki to send the diagram to the lineup as a ghost page. Both follow Ward Cunningham's Enrich Any SVG pattern."
       },
       "date": 1782864002000
     },
@@ -68,7 +68,7 @@
       "item": {
         "type": "paragraph",
         "id": "c1d2e3f4a5b60001",
-        "text": "Diagram types — CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. NRM (Neighbourhood Risk Management): incident and risk analysis. Wardley: Wardley mapping on an evolution/visibility canvas. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
+        "text": "Diagram types \u2014 CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. NRM (Neighbourhood Risk Management): incident and risk analysis on the Tripod Beta pattern. Trace: follow a path through an existing graph. Wardley: Wardley mapping on an evolution/visibility canvas. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. SFD (Stock and Flow): stocks, valves, auxiliaries and clouds in the Stella idiom, with XMILE export. LOP (Linkage of Processes): the Deming / API organization-as-a-system map. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
       },
       "date": 1782864003000
     },
@@ -79,7 +79,7 @@
       "item": {
         "type": "paragraph",
         "id": "d2e3f4a5b6c70002",
-        "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes."
+        "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. A model can also be opened straight from a URL with ?url=, including an RCN Substrate subgraph projection. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes."
       },
       "date": 1782864004000
     },
@@ -104,6 +104,36 @@
         "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [[https://github.com/marpie1/wiki-plugin-rcngraph]]. Published on npm as wiki-plugin-rcngraph."
       },
       "date": 1782864006000
+    },
+    {
+      "type": "edit",
+      "id": "c1d2e3f4a5b60001",
+      "item": {
+        "type": "paragraph",
+        "id": "c1d2e3f4a5b60001",
+        "text": "Diagram types \u2014 CLD (Causal Loop): map feedback loops and system dynamics. EIP (Enriched Influence Pattern): influence networks with stakeholders, flows, and interventions. NRM (Neighbourhood Risk Management): incident and risk analysis on the Tripod Beta pattern. Trace: follow a path through an existing graph. Wardley: Wardley mapping on an evolution/visibility canvas. OPM (Object-Process Methodology): system structure and process using Dov Dori's ISO 19450 standard, with OPL sentences and Cypher export. SFD (Stock and Flow): stocks, valves, auxiliaries and clouds in the Stella idiom, with XMILE export. LOP (Linkage of Processes): the Deming / API organization-as-a-system map. VSM (Value Stream Mapping): Cindy Jimmerson's healthcare value stream \u2014 four flows in lanes, storm bursts, and a computed sawtooth giving lead time, value-added time and the ratio between them, with a one-click handoff that seeds an A3. Triples: nodes and edges can link to other edges, enabling RDF-style triple referencing for knowledge graph authoring."
+      },
+      "date": 1787712127315
+    },
+    {
+      "type": "edit",
+      "id": "d2e3f4a5b6c70002",
+      "item": {
+        "type": "paragraph",
+        "id": "d2e3f4a5b6c70002",
+        "text": "Import and export: MDL/Vensim CLD, Graphviz .dot, XMILE, Cypher, Wardley JSON, and CSV. A model can also be opened straight from a URL with ?url=, including an RCN Substrate subgraph projection. Multi-trace edges, node and edge layers, canvas legend, and Print are available in all modes. A mode\u2019s backdrop \u2014 EIP columns, Wardley grid, LOP bands, VSM lanes and sawtooth \u2014 is drawn inside the SVG, so it travels into the wiki item and out again; save while still in that mode, because the backdrop only draws there."
+      },
+      "date": 1787712128315
+    },
+    {
+      "type": "edit",
+      "id": "4b6f8e3d9c2a1705",
+      "item": {
+        "type": "paragraph",
+        "id": "4b6f8e3d9c2a1705",
+        "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
+      },
+      "date": 1791164815533
     }
   ]
 }
