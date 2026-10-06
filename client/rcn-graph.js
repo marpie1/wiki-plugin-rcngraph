@@ -11,6 +11,86 @@
   let pendingItem = null
   let pending$item = null
 
+  // ── Build playback ─────────────────────────────────────────────────────
+  // The Graph Tool's Build mode gives nodes a step number (n.build); an edge
+  // shows once both its nodes do. The saved SVG keeps the tool's <g id="node-ID">
+  // and <g id="edge-ID"> groups, so playing a build here is only hiding and
+  // showing those groups — no redraw, no Graph Tool needed.
+  const BUILD_COLOR = '#4f46e5'
+
+  function graphModel(item) {
+    let g = item.graphJSON
+    if (typeof g === 'string') { try { g = JSON.parse(g) } catch (e) { return null } }
+    return g && Array.isArray(g.nodes) && Array.isArray(g.edges) ? g : null
+  }
+
+  function buildSteps(g) {
+    const s = new Set()
+    g.nodes.forEach(n => { if (n.build > 0) s.add(n.build) })
+    return [...s].sort((a, b) => a - b)
+  }
+
+  function groupFor(svg, kind, id) {
+    return svg.querySelector('#' + CSS.escape(kind + '-' + id))
+  }
+
+  // idx === null: not playing, everything shows. 0: nothing of the build yet.
+  function showBuildStep($item, g, idx) {
+    const svg = $item.find('svg').get(0)
+    if (!svg) return
+    const steps = buildSteps(g)
+    const thr = idx > 0 ? steps[idx - 1] : 0
+    const hideOthers = g.buildOthers === 'hide'
+    const byId = {}
+    g.nodes.forEach(n => { byId[n.id] = n })
+    const arrives = n => (n && n.build > 0 ? n.build : 0)
+    const shown = n => {
+      if (idx === null || !n) return true
+      return n.build > 0 ? n.build <= thr : !hideOthers
+    }
+    svg.querySelectorAll('.rcn-build-ring').forEach(el => el.remove())
+    g.nodes.forEach(n => {
+      const el = groupFor(svg, 'node', n.id)
+      if (!el) return
+      el.style.display = shown(n) ? '' : 'none'
+      if (idx > 0 && n.build === thr && n.w && n.h) {
+        const r = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse')
+        r.setAttribute('class', 'rcn-build-ring')
+        r.setAttribute('cx', '0'); r.setAttribute('cy', '0')
+        r.setAttribute('rx', String(n.w / 2 + 9)); r.setAttribute('ry', String(n.h / 2 + 9))
+        r.setAttribute('fill', 'none'); r.setAttribute('stroke', BUILD_COLOR)
+        r.setAttribute('stroke-width', '3'); r.setAttribute('opacity', '.9')
+        r.setAttribute('pointer-events', 'none')
+        el.appendChild(r)
+      }
+    })
+    g.edges.forEach(e => {
+      const el = groupFor(svg, 'edge', e.id)
+      if (!el) return
+      const s = byId[e.src], t = byId[e.tgt]
+      const on = shown(s) && shown(t)
+      el.style.display = on ? '' : 'none'
+      // The edge that arrived with this step: recolour its visible line, remember
+      // the original so the next step can put it back.
+      const isNew = on && idx > 0 && Math.max(arrives(s), arrives(t)) === thr
+      el.querySelectorAll('path').forEach(p => {
+        const st = p.getAttribute('stroke')
+        if (!st || st === 'transparent' || st === 'none') return
+        if (isNew) {
+          if (!p.hasAttribute('data-build-stroke')) p.setAttribute('data-build-stroke', st)
+          p.setAttribute('stroke', BUILD_COLOR)
+        } else if (p.hasAttribute('data-build-stroke')) {
+          p.setAttribute('stroke', p.getAttribute('data-build-stroke'))
+          p.removeAttribute('data-build-stroke')
+        }
+      })
+    })
+    const bar = $item.find('.build-bar')
+    bar.find('.build-count').text(idx === null ? '' : 'Step ' + idx + ' / ' + steps.length).toggle(idx !== null)
+    bar.find('.build-play').text(idx === null ? '▶ Play build' : '■ Show all')
+    bar.find('.build-prev, .build-next').toggle(idx !== null)
+  }
+
   function renderContent($item, item) {
     $item.empty()
     if (item.svgString) {
@@ -22,6 +102,7 @@
           <div style="padding:6px 0 0;display:flex;gap:6px;justify-content:center;">
             <button class="edit-graph" style="cursor:pointer;">Edit in Graph Tool ↗</button>
           </div>
+          ${buildBar(item)}
         </div>
       `)
     } else {
@@ -33,6 +114,20 @@
         </div>
       `)
     }
+  }
+
+  function buildBar(item) {
+    const g = graphModel(item)
+    const n = g ? buildSteps(g).length : 0
+    if (!n) return ''
+    const b = 'cursor:pointer;color:' + BUILD_COLOR + ';'
+    return `
+          <div class="build-bar" tabindex="0" title="This diagram has a build: it can be revealed node by node. ← → step through it." style="padding:6px 0 0;display:flex;gap:6px;justify-content:center;align-items:center;outline:none;">
+            <button class="build-prev" style="${b}display:none" title="Back one step (←)">◀</button>
+            <button class="build-play" style="${b}">▶ Play build</button>
+            <button class="build-next" style="${b}display:none" title="Next step (→)">▶</button>
+            <span class="build-count" style="display:none;font-size:12px;color:#64748b;min-width:70px;text-align:center"></span>
+          </div>`
   }
 
   function emit($item, item) {
@@ -76,7 +171,36 @@
       const popup = window.open(GRAPH_URL, WINDOW_NAME, 'popup,height=820,width=1440')
       if (popup) popup.focus()
     })
-    $item.on('dblclick', () => wiki.textEditor($item, item))
+    $item.on('dblclick', e => {
+      // Stepping a build is quick clicking — never let it open the editor.
+      if ($(e.target).closest('.build-bar').length) return
+      wiki.textEditor($item, item)
+    })
+    // Build playback. Namespaced and reset, because a save re-runs bind.
+    let buildIdx = null
+    const step = d => {
+      const g = graphModel(item)
+      if (!g) return
+      const n = buildSteps(g).length
+      buildIdx = buildIdx === null ? (d < 0 ? n : 1) : Math.max(0, Math.min(n, buildIdx + d))
+      showBuildStep($item, g, buildIdx)
+    }
+    $item.off('.rcnbuild')
+    $item.on('click.rcnbuild', '.build-play', () => {
+      const g = graphModel(item)
+      if (!g) return
+      buildIdx = buildIdx === null ? 1 : null
+      showBuildStep($item, g, buildIdx)
+      $item.find('.build-bar').trigger('focus')
+    })
+    $item.on('click.rcnbuild', '.build-prev', () => step(-1))
+    $item.on('click.rcnbuild', '.build-next', () => step(1))
+    $item.on('keydown.rcnbuild', '.build-bar', e => {
+      if (buildIdx === null) return
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ') { e.preventDefault(); e.stopPropagation(); step(1) }
+      else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { e.preventDefault(); e.stopPropagation(); step(-1) }
+      else if (e.key === 'Escape') { e.preventDefault(); buildIdx = null; showBuildStep($item, graphModel(item), null) }
+    })
     // Labels in the saved SVG are wrapped as <a class="internal" data-title=…>, but
     // two things stopped a click reaching the page: the <text> keeps the canvas's
     // pointer-events="none", so the click fell through to the box behind it; and
