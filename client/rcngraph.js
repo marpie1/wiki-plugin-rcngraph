@@ -79,6 +79,18 @@
       if (popup) popup.focus()
     })
     $item.on('dblclick', () => wiki.textEditor($item, item))
+    // Labels in the saved SVG are wrapped as <a class="internal" data-title=…>, but
+    // two things stopped a click reaching the page: the <text> keeps the canvas's
+    // pointer-events="none", so the click fell through to the box behind it; and
+    // FedWiki's own .internal handler names the page from the clicked <tspan>, so a
+    // two-line label would land on its first line. Follow data-title here instead.
+    // Namespaced and reset, because a save re-runs bind on the same element.
+    $item.off('click.rcnlink').on('click.rcnlink', 'svg a.internal', e => {
+      e.preventDefault()
+      e.stopPropagation()
+      const title = e.currentTarget.getAttribute('data-title')
+      if (title) wiki.doInternalLink(title, e.shiftKey ? null : $item.parents('.page:first'))
+    })
   }
 
   function graphListener(event) {
@@ -120,6 +132,15 @@
       default:
         if (wiki.debug) console.log('rcngraph listener — unknown action:', data)
     }
+  }
+
+  // CSS outranks SVG presentation attributes, so this re-enables clicks on labels
+  // in items saved before the Graph Tool stopped writing pointer-events="none".
+  if (typeof document !== 'undefined' && !document.getElementById('rcngraph-link-style')) {
+    const s = document.createElement('style')
+    s.id = 'rcngraph-link-style'
+    s.textContent = '.rcngraph svg a.internal text,.rcn-graph svg a.internal text{pointer-events:auto;cursor:pointer}'
+    document.head.appendChild(s)
   }
 
   if (typeof window !== 'undefined') {
