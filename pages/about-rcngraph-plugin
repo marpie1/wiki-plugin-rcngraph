@@ -27,6 +27,11 @@
       "text": "Builds: a diagram made in the Graph Tool’s Build mode carries an order for its nodes. The item then shows a Play build button that reveals the diagram right here on the page, step by step: ◀ and ▶ or the arrow keys move through it, each edge appears once both its nodes are on screen, and what a step just brought in is ringed in indigo. Show all puts the whole diagram back. The Graph Tool’s live build, where the room decides the order, runs in the tool itself."
     },
     {
+      "type": "paragraph",
+      "id": "8e7e435485d56e9e",
+      "text": "Walks: a diagram can also carry walks, written in the Graph Tool (press Walk there to play, edit or record one). A walk is a list of steps, each with a sentence or two and the part of the diagram it is about. The item shows a ▶ Walk button: each step lights its part, fades the rest, zooms in so a narrow column can read it, and says the words aloud with the browser’s own voice while showing them as a caption. Space pauses, ◀ ▶ or the arrow keys step, Esc stops, and clicking the drawing pauses so you can look. A walk stops at its questions so a group can talk. Voice off shows the words only. The voice and its speed are chosen in the Graph Tool and remembered by your browser."
+    },
+    {
       "type": "rcngraph",
       "id": "8d4e2a7f1c9b3065",
       "text": ""
@@ -34,7 +39,7 @@
     {
       "type": "paragraph",
       "id": "4b6f8e3d9c2a1705",
-      "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Build playback added October 2026 with Claude Opus 5.5. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
+      "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Build playback and walks added October 2026 with Claude Opus 5.5. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
     }
   ],
   "journal": [
@@ -160,6 +165,27 @@
         "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Build playback added October 2026 with Claude Opus 5.5. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
       },
       "date": 1791313722634
+    },
+    {
+      "type": "add",
+      "id": "8e7e435485d56e9e",
+      "item": {
+        "type": "paragraph",
+        "id": "8e7e435485d56e9e",
+        "text": "Walks: a diagram can also carry walks, written in the Graph Tool (press Walk there to play, edit or record one). A walk is a list of steps, each with a sentence or two and the part of the diagram it is about. The item shows a ▶ Walk button: each step lights its part, fades the rest, zooms in so a narrow column can read it, and says the words aloud with the browser’s own voice while showing them as a caption. Space pauses, ◀ ▶ or the arrow keys step, Esc stops, and clicking the drawing pauses so you can look. A walk stops at its questions so a group can talk. Voice off shows the words only. The voice and its speed are chosen in the Graph Tool and remembered by your browser."
+      },
+      "after": "b7d1e9c3a5f20814",
+      "date": 1792602075757
+    },
+    {
+      "type": "edit",
+      "id": "4b6f8e3d9c2a1705",
+      "item": {
+        "type": "paragraph",
+        "id": "4b6f8e3d9c2a1705",
+        "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Build playback and walks added October 2026 with Claude Opus 5.5. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
+      },
+      "date": 1792602075758
     }
   ]
 }
