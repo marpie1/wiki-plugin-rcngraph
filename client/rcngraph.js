@@ -221,6 +221,55 @@
     })
   }
 
+  // People's own recordings of a step, made in the Graph Tool, Map or Timeline walk
+  // editor: step.voices = {name: {audio, say}}. A step plays its recording when it has
+  // one, else the computer voice. The listener picks whose, kept in this browser with
+  // the other walk settings (rcnWalkPrefs.speaker: '' any, '-' computer only, or a name).
+  let recAudio = null
+  const recOk = src => typeof src === 'string' && /^(data:audio\/|https?:\/\/|\/)/.test(src)
+  const recNames = st => st && st.voices ? Object.keys(st.voices).filter(n => st.voices[n] && recOk(st.voices[n].audio)) : []
+  const recSpeakers = walk => [...new Set(((walk && walk.steps) || []).flatMap(recNames))].sort()
+  function recSpeaker() {
+    try { return JSON.parse(localStorage.getItem('rcnWalkPrefs') || '{}').speaker || '' } catch (e) { return '' }
+  }
+  function recSetSpeaker(v) {
+    let p = {}
+    try { p = JSON.parse(localStorage.getItem('rcnWalkPrefs') || '{}') } catch (e) {}
+    p.speaker = v
+    try { localStorage.setItem('rcnWalkPrefs', JSON.stringify(p)) } catch (e) {}
+  }
+  function recSpeakerOptions(walk) {
+    const ns = recSpeakers(walk), cur = recSpeaker()
+    if (!ns.length) return ''
+    const opt = (v, label) => `<option value="${esc(v)}"${cur === v ? ' selected' : ''}>${esc(label)}</option>`
+    return opt('', 'Recorded voices') + ns.map(n => opt(n, 'Recorded: ' + n)).join('') + opt('-', 'Computer voice only')
+  }
+  function recHush() {
+    const a = recAudio
+    recAudio = null
+    if (a) { a.onended = a.onerror = null; try { a.pause() } catch (e) {} }
+  }
+  // Say a step: a person's recording when it has one, else the computer voice.
+  function walkSayStep(st, isCurrent, done) {
+    const ns = recNames(st), want = recSpeaker()
+    if (!walkPrefs().on || want === '-' || !ns.length) { walkSay(st.say, isCurrent, done); return }
+    try { if (window.speechSynthesis) speechSynthesis.cancel() } catch (e) {}
+    recHush()
+    const a = new Audio(st.voices[ns.includes(want) ? want : ns[0]].audio)
+    recAudio = a
+    let out = false
+    const fin = ok => {
+      if (out || recAudio !== a) return
+      out = true; recAudio = null
+      if (!isCurrent()) return
+      if (ok) done(); else walkSay(st.say, isCurrent, done)
+    }
+    a.onended = () => fin(true)
+    a.onerror = () => fin(false)
+    const p = a.play()
+    if (p && p.catch) p.catch(() => fin(false))
+  }
+
   function walkBar(item) {
     const g = graphModel(item)
     const ws = walkList(g)
@@ -239,6 +288,7 @@
               <button class="walk-next" style="${b}display:none" title="Next step (→)">▶</button>
               <span class="walk-count" style="display:none;font-size:12px;color:#64748b;min-width:70px;text-align:center"></span>
               <button class="walk-voice" style="${b}display:none" title="Read the words aloud, or show them only"></button>
+          <select class="walk-speaker" style="font-size:12px;max-width:170px;display:none" title="Whose voice reads the walk (kept in this browser)"></select>
               <button class="walk-close" style="${b}display:none" title="Stop the walk (Esc)">■ Stop</button>
             </div>
             <div class="walk-say" aria-live="polite" style="display:none;margin:8px 4px 0;padding:10px 12px;background:#fff;border:1px solid #c7d2fe;border-radius:8px;font-size:17px;line-height:1.45;color:#1e1b4b"></div>
@@ -364,7 +414,7 @@
     // so a step that was skipped or stopped can never move the walk on.
     const wk = { w: null, i: 0, playing: false, token: 0, heard: null }
     const curWalk = () => { const g = graphModel(item); return g && wk.w !== null ? walkList(g)[wk.w] : null }
-    const stopVoice = () => { wk.token++; try { if (window.speechSynthesis) speechSynthesis.cancel() } catch (e) {} }
+    const stopVoice = () => { wk.token++; recHush(); try { if (window.speechSynthesis) speechSynthesis.cancel() } catch (e) {} }
     const walkUI = note => {
       const walk = curWalk(), open = !!walk
       if (note) wk.heard = wk.i; else if (wk.playing) wk.heard = null
@@ -374,6 +424,9 @@
       $bar.find('.walk-say').toggle(open)
       $bar.find('.walk-play').text(wk.playing ? '❚❚' : '▶')
       $bar.find('.walk-voice').text(walkPrefs().on ? '🔈 Voice on' : '🔇 Voice off')
+      const so = open ? recSpeakerOptions(walk) : '', $sp = $bar.find('.walk-speaker')
+      if ($sp.data('opts') !== so) $sp.html(so).data('opts', so)
+      $sp.toggle(!!so)
       $bar.find('.walk-count').text(open ? 'Step ' + (wk.i + 1) + ' of ' + walk.steps.length : '')
       $bar.find('.walk-note').text(note || (open && !wk.playing ? 'Space plays · ← → step · Esc stops' : ''))
     }
@@ -391,7 +444,7 @@
     const walkSpeak = () => {
       const tok = ++wk.token, walk = curWalk(), st = walk && walk.steps[wk.i]
       if (!st) return
-      walkSay(st.say, () => tok === wk.token && activeWalk === wk, () => {
+      walkSayStep(st, () => tok === wk.token && activeWalk === wk, () => {
         const last = wk.i >= walk.steps.length - 1
         if (st.ask || last) { wk.playing = false; walkUI(last && !st.ask ? 'End of the walk. ← to go back, Esc to stop.' : 'Over to you. Press Space or ▶ to go on.'); return }
         setTimeout(() => { if (tok === wk.token && wk.playing) walkShow(wk.i + 1) }, 800)
@@ -433,6 +486,7 @@
     $item.on('click.rcnwalk', '.walk-prev', () => walkShow(wk.i - 1))
     $item.on('click.rcnwalk', '.walk-next', () => walkShow(wk.i + 1))
     $item.on('click.rcnwalk', '.walk-close', () => walkEnd())
+    $item.on('change.rcnwalk', '.walk-speaker', e => { recSetSpeaker(e.target.value); if (wk.playing) walkSpeak() })
     $item.on('click.rcnwalk', '.walk-voice', () => {
       const on = !walkPrefs().on
       try { localStorage.setItem('rcnWalkVoice', on ? 'on' : 'off') } catch (e) {}
