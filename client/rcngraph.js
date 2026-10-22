@@ -180,17 +180,6 @@
       const el = groupFor(svg, 'node', n.id)
       if (!el) return
       el.style.opacity = op('nodes', String(n.id))
-      // A ring on what this step brings in for the first time.
-      if (lit && lit.nodes.has(String(n.id)) && !seen.nodes.has(String(n.id)) && n.w && n.h) {
-        const r = document.createElementNS('http://www.w3.org/2000/svg', 'ellipse')
-        r.setAttribute('class', 'rcn-walk-ring')
-        r.setAttribute('cx', '0'); r.setAttribute('cy', '0')
-        r.setAttribute('rx', String(n.w / 2 + 9)); r.setAttribute('ry', String(n.h / 2 + 9))
-        r.setAttribute('fill', 'none'); r.setAttribute('stroke', BUILD_COLOR)
-        r.setAttribute('stroke-width', '3'); r.setAttribute('opacity', '.8')
-        r.setAttribute('pointer-events', 'none')
-        el.appendChild(r)
-      }
     })
     g.edges.forEach(e => {
       const el = groupFor(svg, 'edge', e.id)
