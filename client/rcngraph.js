@@ -517,6 +517,57 @@
     })
   }
 
+  // Recordings live as files in this site's assets (assets/voice-files), one file per
+  // recording, named by its content. On save, any recording still held inside a walk
+  // (a data: URL from a walk editor) is uploaded there and replaced by the file's full
+  // address, so a page and its history keep only addresses, a recording is never
+  // stored twice, and a forked page still plays from the site that has the file.
+  // If the upload fails (not signed in, say) the recording stays inside the walk, so
+  // nothing is lost, and the next save that can upload moves it out.
+  const VOICE_FOLDER = 'voice-files'
+  function voiceSteps(walks) {
+    const out = []
+    for (const w of walks || []) for (const st of (w && w.steps) || []) {
+      for (const n of Object.keys((st && st.voices) || {})) {
+        const v = st.voices[n]
+        if (v && typeof v.audio === 'string' && /^data:audio\//.test(v.audio)) out.push(v)
+      }
+    }
+    return out
+  }
+  async function voiceFile(dataUrl) {
+    const blob = await (await fetch(dataUrl)).blob()
+    const sum = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))
+    const hex = [...sum.slice(0, 12)].map(b => b.toString(16).padStart(2, '0')).join('')
+    const ext = /mp4|m4a|aac/.test(blob.type) ? 'm4a' : /wav/.test(blob.type) ? 'wav' : /ogg/.test(blob.type) ? 'ogg' : 'webm'
+    const name = hex + '.' + ext
+    const url = location.origin + '/assets/' + VOICE_FOLDER + '/' + name
+    const have = await fetch(url, { method: 'HEAD', cache: 'no-store' }).then(r => r.ok, () => false)
+    if (!have) {
+      const form = new FormData()
+      form.append('assets', VOICE_FOLDER)   // before the file: the server reads the folder first
+      form.append('uploads[]', blob, name)
+      const r = await fetch('/plugin/assets/upload', { method: 'POST', body: form, credentials: 'same-origin' })
+      if (!r.ok) throw new Error(r.status === 401 ? 'sign in to this wiki to save recordings as files' : 'upload failed (' + r.status + ')')
+    }
+    return url
+  }
+  // Move every embedded recording in these walks to a file; resolves to a note
+  // for the reader when some could not be moved, else ''.
+  async function voicesToFiles(walks) {
+    const vs = voiceSteps(walks)
+    let failed = '', n = 0
+    for (const v of vs) {
+      try { v.audio = await voiceFile(v.audio); n++ } catch (e) { failed = e.message || String(e) }
+    }
+    if (n) console.log('voice files: ' + n + ' recording' + (n === 1 ? '' : 's') + ' now point to assets/' + VOICE_FOLDER + ' (each file is uploaded once)')
+    return failed ? 'Recordings were kept inside the page: ' + failed + '.' : ''
+  }
+  function voiceNotice($item, msg) {
+    $item.find('.voice-note').remove()
+    if (msg) $item.append($('<div class="voice-note" style="font-size:12px;color:#92400e;padding:4px 0"></div>').text(msg))
+  }
+
   function graphListener(event) {
     if (!event.source || !event.source.opener) return
     if (!event.data || event.data.toolType !== 'rcn-graph') return
@@ -533,12 +584,19 @@
       }
       case 'saveGraph': {
         if (!pendingItem || !pending$item) break
-        pendingItem.graphJSON = data.graphJSON
-        pendingItem.svgString = data.svgString
-        const $page = pending$item.parents('.page:first')
-        wiki.pageHandler.put($page, { type: 'edit', id: pendingItem.id, item: pendingItem })
-        renderContent(pending$item, pendingItem)
-        bind(pending$item, pendingItem)
+        const item = pendingItem, $item = pending$item
+        let g = data.graphJSON
+        const asText = typeof g === 'string'
+        try { if (asText) g = JSON.parse(g) } catch (e) { g = null }
+        const moved = g && voiceSteps(g.walks).length ? voicesToFiles(g.walks) : Promise.resolve('')
+        moved.then(note => {
+          item.graphJSON = g ? (asText ? JSON.stringify(g) : g) : data.graphJSON
+          item.svgString = data.svgString
+          wiki.pageHandler.put($item.parents('.page:first'), { type: 'edit', id: item.id, item })
+          renderContent($item, item)
+          bind($item, item)
+          voiceNotice($item, note)
+        })
         break
       }
       case 'doInternalLink': {
