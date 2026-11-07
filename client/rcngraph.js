@@ -539,7 +539,7 @@
     const blob = await (await fetch(dataUrl)).blob()
     const sum = new Uint8Array(await crypto.subtle.digest('SHA-256', await blob.arrayBuffer()))
     const hex = [...sum.slice(0, 12)].map(b => b.toString(16).padStart(2, '0')).join('')
-    const ext = /mp4|m4a|aac/.test(blob.type) ? 'm4a' : /wav/.test(blob.type) ? 'wav' : /ogg/.test(blob.type) ? 'ogg' : 'webm'
+    const ext = /mpeg|mp3/.test(blob.type) ? 'mp3' : /mp4|m4a|aac/.test(blob.type) ? 'm4a' : /wav/.test(blob.type) ? 'wav' : /ogg/.test(blob.type) ? 'ogg' : 'webm'
     const name = hex + '.' + ext
     const url = location.origin + '/assets/' + VOICE_FOLDER + '/' + name
     const have = await fetch(url, { method: 'HEAD', cache: 'no-store' }).then(r => r.ok, () => false)
