@@ -196,6 +196,36 @@
     try { on = localStorage.getItem('rcnWalkVoice') !== 'off' } catch (e) {}
     return { voice: p.voice || '', rate: (+p.rate >= 0.6 && +p.rate <= 1.4) ? +p.rate : 0.95, on }
   }
+  function walkSetPref(k, v) {
+    let p = {}
+    try { p = JSON.parse(localStorage.getItem('rcnWalkPrefs') || '{}') } catch (e) {}
+    p[k] = v
+    try { localStorage.setItem('rcnWalkPrefs', JSON.stringify(p)) } catch (e) {}
+  }
+  // The ⚙ Voice panel (Nov 8 2026): the Graph Tool's voice and speed controls, the
+  // same rcnWalkPrefs keys, so a choice made here holds in the tools and other plugins.
+  const goodVoice = v => /Enhanced|Premium|Natural|Neural/i.test(v.name)
+  const enVoices = () => window.speechSynthesis ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : []
+  function voiceOptions() {
+    const vs = enVoices()
+    if (!vs.length) return '<option value="">No voices found in this browser</option>'
+    const cur = walkVoice(walkPrefs().voice)
+    return vs.slice().sort((a, b) => (goodVoice(b) - goodVoice(a)) || a.name.localeCompare(b.name))
+      .map(v => `<option value="${esc(v.name)}"${cur && cur.name === v.name ? ' selected' : ''}>${goodVoice(v) ? '★ ' : ''}${esc(v.name)} (${esc(v.lang)})</option>`).join('')
+  }
+  function voiceHint() {
+    const mac = /Mac/i.test(navigator.platform || navigator.userAgent)
+    return enVoices().some(goodVoice) ? '★ marks the more natural voices. Speed is for the computer voice; a recording plays as it was recorded.'
+      : mac ? 'No natural-sounding voice is installed. On a Mac: System Settings → Accessibility → Spoken Content → System voice → Manage Voices… Download an English voice marked Enhanced or Premium, then quit the browser (⌘Q) and open it again: reloading the page is not enough.'
+        : 'No natural-sounding voice is installed. Your system’s speech settings can add more voices; reload this page after.'
+  }
+  function voiceSample() {
+    if (!window.speechSynthesis) return
+    const p = walkPrefs(), v = walkVoice(p.voice), u = new SpeechSynthesisUtterance('This is how a walk will sound.')
+    if (v) { u.voice = v; u.lang = v.lang }
+    u.rate = p.rate
+    speechSynthesis.speak(u)
+  }
   function walkVoice(name) {
     const vs = window.speechSynthesis ? speechSynthesis.getVoices().filter(v => /^en/i.test(v.lang)) : []
     return vs.find(v => v.name === name) || vs.find(v => /Enhanced|Premium|Natural|Neural/i.test(v.name)) ||
@@ -289,7 +319,16 @@
               <span class="walk-count" style="display:none;font-size:12px;color:#64748b;min-width:70px;text-align:center"></span>
               <button class="walk-voice" style="${b}display:none" title="Read the words aloud, or show them only"></button>
           <select class="walk-speaker" style="font-size:12px;max-width:170px;display:none" title="Whose voice reads the walk (kept in this browser)"></select>
+              <button class="walk-voiceset" style="${b}" title="Choose which voice reads the walk, and how fast">⚙ Choose voice</button>
               <button class="walk-close" style="${b}display:none" title="Stop the walk (Esc)">■ Stop</button>
+            </div>
+            <div class="walk-voicepanel" style="display:none;margin:6px 4px 0;padding:8px 10px;background:#eef2ff;border-radius:8px;font-size:12px;color:#374151">
+              <div style="display:flex;flex-wrap:wrap;gap:8px 14px;align-items:center;justify-content:center">
+                <label>Voice <select class="walk-voicesel" style="font-size:12px;max-width:260px" title="Which computer voice reads the walk (kept in this browser)"></select></label>
+                <label>Speed <input class="walk-rate" type="range" min="0.6" max="1.4" step="0.05" style="vertical-align:middle"> <span class="walk-rate-val"></span></label>
+                <button class="walk-sample" style="${b}" title="Hear the chosen voice at the chosen speed">Hear a sample</button>
+              </div>
+              <div class="walk-voicehint" style="font-size:11px;color:#6b7280;text-align:center;margin-top:4px"></div>
             </div>
             <div class="walk-say" aria-live="polite" style="display:none;margin:8px 4px 0;padding:10px 12px;background:#fff;border:1px solid #c7d2fe;border-radius:8px;font-size:17px;line-height:1.45;color:#1e1b4b"></div>
             <div class="walk-note" style="font-size:11px;color:#64748b;text-align:center;margin-top:3px"></div>
@@ -317,7 +356,7 @@
       $item.append(`
         <div style="background-color:#eee;padding:15px;text-align:center;">
           <p style="font-weight:bold;margin:0 0 6px;">RCN Graph Tool</p>
-          <p style="color:#666;font-size:0.85em;margin:0 0 12px;">CLD · EIP · NRM · Trace · Wardley · OPM · SFD · LOP · VSM</p>
+          <p style="color:#666;font-size:0.85em;margin:0 0 12px;">CLD · EIP · NRM · Trace · Wardley · OPM · SFD · LOP · VSM · IBIS</p>
           <button class="open-graph" style="cursor:pointer;">Open Graph Tool ↗</button>
         </div>
       `)
@@ -371,8 +410,144 @@
     new MutationObserver(add).observe(el, { childList: true })
   }
 
+  // ── Notes you can edit from their popup (Nov 8 2026) ──────────────────────
+  // The drawing's hover text is the browser's own <title> tooltip, which cannot hold a
+  // button. So the plugin shows its own popup instead (the <title> text moves to
+  // data-note while the page is open, and stays in the saved picture), with
+  // "✎ Edit note". Saving writes the note into graphJSON — the same field the Graph
+  // Tool's side panel edits — and into that box's hover text in svgString, then saves
+  // the page. A box's label and the picture itself are not touched.
+  const NOTE_DOT = '#f59e0b'
+  function graphOf(item) {
+    const asText = typeof item.graphJSON === 'string'
+    let g = item.graphJSON
+    if (asText) { try { g = JSON.parse(g) } catch (e) { g = null } }
+    return { g, asText }
+  }
+  // "📌 note" leads the hover text when there is a note; properties follow it.
+  function retitle(title, oldNote, newNote) {
+    const t = String(title || '')
+    const pin = '\uD83D\uDCCC '
+    const rest = oldNote && t.indexOf(pin + oldNote) === 0 ? t.slice((pin + oldNote).length).replace(/^\n/, '')
+      : t.indexOf(pin) === 0 ? t.replace(/^[^\n]*\n?/, '') : t
+    return (newNote ? pin + newNote + (rest ? '\n' : '') : '') + rest
+  }
+  function svgWithNote(svgString, kind, id, oldNote, newNote) {
+    const doc = new DOMParser().parseFromString(svgString, 'image/svg+xml')
+    if (doc.getElementsByTagName('parsererror').length) return null
+    const g = doc.getElementById(kind + '-' + id)
+    if (!g) return null
+    const NS = 'http://www.w3.org/2000/svg'
+    let t = Array.from(g.children).find(c => c.localName === 'title')
+    const text = retitle(t ? t.textContent : '', oldNote, newNote)
+    if (text) {
+      if (!t) { t = doc.createElementNS(NS, 'title'); g.insertBefore(t, g.firstChild) }
+      t.textContent = text
+    } else if (t) t.remove()
+    if (kind === 'node') {
+      const dot = Array.from(g.children).find(c => c.localName === 'circle' && c.getAttribute('fill') === NOTE_DOT && c.getAttribute('r') === '4')
+      const rect = Array.from(g.children).find(c => c.localName === 'rect')
+      if (newNote && !dot && rect) {
+        const c = doc.createElementNS(NS, 'circle')
+        c.setAttribute('cx', (+rect.getAttribute('x') + +rect.getAttribute('width') - 4).toFixed(1))
+        c.setAttribute('cy', (+rect.getAttribute('y') + 4).toFixed(1))
+        c.setAttribute('r', '4'); c.setAttribute('fill', NOTE_DOT); c.setAttribute('stroke', '#fff'); c.setAttribute('stroke-width', '1')
+        rect.after(c)
+      } else if (!newNote && dot) dot.remove()
+    }
+    return new XMLSerializer().serializeToString(doc.documentElement)
+  }
+  function bindNotes($item, item) {
+    const box = $item.find('.graph-box').get(0)
+    if (!box || !graphOf(item).g) return
+    let card = null, hideT = 0, editing = false
+    const groups = box.querySelectorAll('g[id^="node-"], g[id^="edge-"]')
+    // Move each <title> into data-note so the browser's own tooltip does not double ours.
+    groups.forEach(gEl => {
+      const t = Array.from(gEl.children).find(c => c.localName === 'title')
+      if (t) { gEl.setAttribute('data-note', t.textContent); t.remove() }
+    })
+    const close = () => { editing = false; if (card) { card.remove(); card = null } }
+    const place = (ev) => {
+      if (!card || editing) return
+      const w = card.offsetWidth || 300, h = card.offsetHeight || 0
+      let x = ev.clientX + 14, y = ev.clientY - 10
+      if (x + w > window.innerWidth - 8) x = Math.max(8, ev.clientX - w - 14)
+      if (y + h > window.innerHeight - 8) y = Math.max(8, window.innerHeight - h - 8)
+      card.style.left = x + 'px'; card.style.top = y + 'px'
+    }
+    const show = (gEl, ev) => {
+      if (editing) return
+      clearTimeout(hideT)
+      const kind = gEl.id.startsWith('node-') ? 'node' : 'edge', id = gEl.id.slice(kind.length + 1)
+      const { g } = graphOf(item)
+      const obj = g && (kind === 'node' ? g.nodes : g.edges).find(o => String(o.id) === id)
+      const text = gEl.getAttribute('data-note') || ''
+      if (!obj || !text) { close(); return }   // like the Graph Tool: a popup only where there is hover text
+      if (!card) {
+        card = document.createElement('div')
+        card.className = 'rcng-note-card'
+        card.style.cssText = 'position:fixed;z-index:3000;max-width:320px;background:rgba(255,255,255,.96);border:1px solid rgba(0,0,0,.1);border-radius:8px;box-shadow:0 2px 12px rgba(0,0,0,.18);padding:8px 12px;font:12px/1.55 system-ui,sans-serif;color:#0f172a;white-space:pre-wrap;word-break:break-word'
+        card.addEventListener('mouseenter', () => clearTimeout(hideT))
+        card.addEventListener('mouseleave', () => { if (!editing) hideT = setTimeout(close, 120) })
+        document.body.appendChild(card)
+      }
+      card.innerHTML = `<div>${esc(text)}</div>` +
+        `<div style="margin-top:6px;white-space:normal"><button class="rcng-note-edit" style="font:inherit;font-size:11px;padding:2px 8px;border:1px solid #c7d2fe;border-radius:5px;background:#fff;color:#3730a3;cursor:pointer" title="Change this note. It is saved into the drawing on this page.">✎ Edit note</button></div>`
+      card.querySelector('.rcng-note-edit').onclick = () => edit(gEl, kind, id, obj)
+      place(ev)
+    }
+    const edit = (gEl, kind, id, obj) => {
+      editing = true
+      const label = String(obj.label || '').replace(/\n/g, ' ')
+      card.style.width = '360px'; card.style.maxWidth = 'calc(100vw - 16px)'; card.style.whiteSpace = 'normal'
+      card.innerHTML = `<div style="font-weight:600;margin-bottom:4px">Note on “${esc(label || '(no label)')}”</div>
+        <textarea rows="6" style="width:100%;box-sizing:border-box;font:13px/1.4 system-ui,sans-serif;padding:5px 7px;border:1px solid #c7d2fe;border-radius:5px;resize:vertical" placeholder="What a reader should know about this: a quote, a source, a reason."></textarea>
+        <div style="display:flex;gap:6px;align-items:center;margin-top:6px">
+          <button class="rcng-note-save" style="font:inherit;font-size:11px;padding:2px 10px;border:1px solid #4f46e5;border-radius:5px;background:#4f46e5;color:#fff;font-weight:600;cursor:pointer">Save</button>
+          <button class="rcng-note-cancel" style="font:inherit;font-size:11px;padding:2px 8px;border:1px solid #c7d2fe;border-radius:5px;background:#fff;color:#3730a3;cursor:pointer">Cancel</button>
+          <span style="font-size:10px;color:#64748b;margin-left:auto">⌘/Ctrl-Enter saves · Esc cancels</span></div>`
+      const r = card.getBoundingClientRect()
+      if (r.right > window.innerWidth - 8) card.style.left = Math.max(8, window.innerWidth - r.width - 8) + 'px'
+      if (r.bottom > window.innerHeight - 8) card.style.top = Math.max(8, window.innerHeight - r.height - 8) + 'px'
+      const ta = card.querySelector('textarea')
+      ta.value = obj.note || ''
+      const save = () => {
+        const v = ta.value.replace(/\s+$/, '')
+        const old = obj.note || ''
+        close()
+        if (v === old) return
+        const { g, asText } = graphOf(item)
+        const o = g && (kind === 'node' ? g.nodes : g.edges).find(x => String(x.id) === id)
+        if (!o) return
+        o.note = v
+        const svg = item.svgString ? svgWithNote(item.svgString, kind, id, old, v) : null
+        item.graphJSON = asText ? JSON.stringify(g) : g
+        if (svg) item.svgString = svg
+        wiki.pageHandler.put($item.parents('.page:first'), { type: 'edit', id: item.id, item })
+        renderContent($item, item)
+        bind($item, item)
+      }
+      card.querySelector('.rcng-note-save').onclick = save
+      card.querySelector('.rcng-note-cancel').onclick = close
+      ta.addEventListener('keydown', e => {
+        e.stopPropagation()
+        if (e.key === 'Escape') { e.preventDefault(); close() }
+        else if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) { e.preventDefault(); save() }
+      })
+      ta.addEventListener('dblclick', e => e.stopPropagation())
+      ta.focus()
+    }
+    groups.forEach(gEl => {
+      gEl.addEventListener('mouseenter', ev => show(gEl, ev))
+      gEl.addEventListener('mousemove', ev => place(ev))
+      gEl.addEventListener('mouseleave', () => { if (!editing) { clearTimeout(hideT); hideT = setTimeout(close, 150) } })
+    })
+  }
+
   function bind($item, item) {
     aboutMark($item, 'rcngraph')
+    bindNotes($item, item)
     $item.on('click', '.open-graph, .edit-graph', () => {
       pendingItem = item
       pending$item = $item
@@ -420,6 +595,8 @@
       if (note) wk.heard = wk.i; else if (wk.playing) wk.heard = null
       const $bar = $item.find('.walk-bar')
       $bar.find('.walk-prev, .walk-next, .walk-play, .walk-count, .walk-voice, .walk-close').toggle(open)
+      $bar.find('.walk-voicepanel').toggle(!!wk.vp)   // before a walk starts too: choose first, then listen
+      $bar.find('.walk-voiceset').css('background', wk.vp ? '#eef2ff' : '')
       $bar.find('.walk-start, .walk-pick').toggle(!open)
       $bar.find('.walk-say').toggle(open)
       $bar.find('.walk-play').text(wk.playing ? '❚❚' : '▶')
@@ -487,6 +664,30 @@
     $item.on('click.rcnwalk', '.walk-next', () => walkShow(wk.i + 1))
     $item.on('click.rcnwalk', '.walk-close', () => walkEnd())
     $item.on('change.rcnwalk', '.walk-speaker', e => { recSetSpeaker(e.target.value); if (wk.playing) walkSpeak() })
+    const fillVoices = () => {
+      const p = walkPrefs()
+      $item.find('.walk-voicesel').html(voiceOptions())
+      $item.find('.walk-rate').val(p.rate)
+      $item.find('.walk-rate-val').text(Math.round(p.rate * 100) + '%')
+      $item.find('.walk-voicehint').text(voiceHint())
+    }
+    const sample = () => { walkPause(); voiceSample() }
+    $item.on('click.rcnwalk', '.walk-voiceset', () => { wk.vp = !wk.vp; if (wk.vp) fillVoices(); walkUI() })
+    $item.on('change.rcnwalk', '.walk-voicesel', e => { walkSetPref('voice', e.target.value); sample() })
+    $item.on('input.rcnwalk', '.walk-rate', e => {
+      const r = Math.max(0.6, Math.min(1.4, +e.target.value || 0.95))
+      walkSetPref('rate', r)
+      $item.find('.walk-rate-val').text(Math.round(r * 100) + '%')
+    })
+    $item.on('click.rcnwalk', '.walk-sample', () => sample())
+    // Voices arrive late in Chrome; refresh an open panel when they do. One listener
+    // per item however often it is bound; it calls the latest binding's fillVoices.
+    const el0 = $item.get(0)
+    el0.rcnFillVoices = () => { if (wk.vp) fillVoices() }
+    if (!el0.rcnVoiceListen && window.speechSynthesis && speechSynthesis.addEventListener) {
+      el0.rcnVoiceListen = true
+      speechSynthesis.addEventListener('voiceschanged', () => { if (document.body.contains(el0) && el0.rcnFillVoices) el0.rcnFillVoices() })
+    }
     $item.on('click.rcnwalk', '.walk-voice', () => {
       const on = !walkPrefs().on
       try { localStorage.setItem('rcnWalkVoice', on ? 'on' : 'off') } catch (e) {}
@@ -497,7 +698,7 @@
     // Clicking the drawing to look closer pauses the voice.
     $item.on('pointerdown.rcnwalk', '.graph-box', () => { if (wk.playing) walkPause() })
     $item.on('keydown.rcnwalk', '.walk-bar', e => {
-      if (wk.w === null || $(e.target).is('select')) return
+      if (wk.w === null || $(e.target).is('select, input')) return
       if (e.key === ' ') { e.preventDefault(); e.stopPropagation(); walkToggle() }
       else if (e.key === 'ArrowRight') { e.preventDefault(); e.stopPropagation(); walkShow(wk.i + 1) }
       else if (e.key === 'ArrowLeft') { e.preventDefault(); e.stopPropagation(); walkShow(wk.i - 1) }
