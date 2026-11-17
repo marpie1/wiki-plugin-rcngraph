@@ -42,6 +42,11 @@
       "text": "Opening the explorer. Give the item a set field naming a set file, for example \"set\": \"superior.set.json\", and it shows a ⧉ Open together button. The button opens the Time Place Causality Explorer, which puts the timeline, the map and the sketch side by side on one page. A bare file name means the site's /assets/NDC/ folder, where the explorer and the full tools sit; a full address can point to a set anywhere."
     },
     {
+      "type": "paragraph",
+      "id": "149c044870cee1eb",
+      "text": "Whole or Step. Beside the item's buttons, Whole · Step says what this drawing does while a walk plays, its own or one it follows. Step zooms in on what each step is about. Whole keeps the whole drawing, or wherever you have put it: each step lights its boxes where they are. In Whole, drag the drawing to move it, pinch or ⌘-scroll to zoom, and double-click (or ⤢) to see all of it again. A click on the timeline or the map beside it still brings the drawing to that box. You can switch at any time, in the middle of a walk too, and the choice is remembered in your browser. The Time Place Causality Explorer has the same switch on each of its panes."
+    },
+    {
       "type": "rcngraph",
       "id": "8d4e2a7f1c9b3065",
       "text": ""
@@ -218,6 +223,17 @@
       },
       "after": "f2b474457cb3f7bd",
       "date": 1794195627668
+    },
+    {
+      "type": "add",
+      "id": "149c044870cee1eb",
+      "item": {
+        "type": "paragraph",
+        "id": "149c044870cee1eb",
+        "text": "Whole or Step. Beside the item's buttons, Whole · Step says what this drawing does while a walk plays, its own or one it follows. Step zooms in on what each step is about. Whole keeps the whole drawing, or wherever you have put it: each step lights its boxes where they are. In Whole, drag the drawing to move it, pinch or ⌘-scroll to zoom, and double-click (or ⤢) to see all of it again. A click on the timeline or the map beside it still brings the drawing to that box. You can switch at any time, in the middle of a walk too, and the choice is remembered in your browser. The Time Place Causality Explorer has the same switch on each of its panes."
+      },
+      "after": "eb1078f31385e806",
+      "date": 1794945537905
     }
   ]
 }

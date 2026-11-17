@@ -154,6 +154,80 @@
       if (f.seen.has(id)) return 0.42
       return f.click ? 0.3 : 0.13
     }
+    // Whole or Step, item by item (Nov 17 2026), the same choice as the explorer's
+    // panes (tools/rcn-together.html). Step: a walk — this item's or one it
+    // follows — zooms the item to each step. Whole: the item shows the whole
+    // timeline, map or drawing and stays where you put it; steps light things in
+    // place, and you pan and zoom by hand. A click elsewhere still brings the item
+    // to what was clicked. ⤢ shows the whole thing again. Each kind of item
+    // (timeline, map, sketch) remembers its last choice in this browser.
+    const FRAME_KEY = 'rcnLineupFrame'
+    const frameSaved = () => { try { return JSON.parse(localStorage.getItem(FRAME_KEY)) || {} } catch (e) { return {} } }
+    R.frame = el => el.rcnFrame || (el.rcnFrame = frameSaved()[el.rcnKind] === 'whole' ? 'whole' : 'step')
+    R.whole = el => R.frame(el) === 'whole'
+    const frameHTML = fr => {
+      const b = 'font:inherit;font-size:12px;border:0;padding:2px 8px;cursor:pointer;'
+      const on = 'background:#4f46e5;color:#fff;', off = 'background:#fff;color:#334155;'
+      return `<button data-fr="whole" style="${b}${fr === 'whole' ? on : off}" title="Show the whole thing; a walk lights things where they are and leaves the view to you. Drag to pan, pinch or ⌘-scroll to zoom.">Whole</button>` +
+        `<button data-fr="step" style="${b}border-left:1px solid #cbd5e1;${fr === 'step' ? on : off}" title="Zoom in on each step of a walk">Step</button>` +
+        (fr === 'whole' ? `<button data-fr="fit" style="${b}border-left:1px solid #cbd5e1;${off}" title="Show the whole thing again">⤢</button>` : '')
+    }
+    // The switch, for an item's button row. kind: 'timeline' | 'map' | 'sketch'.
+    R.frameSwitch = kind => `<span class="rcn-frame" data-kind="${kind}" style="display:inline-flex;vertical-align:middle;border:1px solid #cbd5e1;border-radius:6px;overflow:hidden" role="group" aria-label="During a walk"></span>`
+    // Wire an item's switch. fn(frame, fit) redraws the item for the new choice.
+    R.bindFrame = function (el, kind, fn) {
+      el.rcnKind = kind
+      const draw = () => el.querySelectorAll('.rcn-frame').forEach(s => { s.innerHTML = frameHTML(R.frame(el)) })
+      draw()
+      if (el.rcnFrameBound) { el.rcnFrameFn = fn; return }
+      el.rcnFrameBound = true; el.rcnFrameFn = fn
+      el.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.rcn-frame button')
+        if (!b) return
+        e.stopPropagation()
+        const v = b.dataset.fr, was = R.frame(el)
+        if (v !== 'fit') {
+          el.rcnFrame = v
+          const s = frameSaved(); s[kind] = v
+          try { localStorage.setItem(FRAME_KEY, JSON.stringify(s)) } catch (err) {}
+        }
+        el.querySelectorAll('.rcn-frame').forEach(s => { s.innerHTML = frameHTML(R.frame(el)) })
+        if (v === 'fit' || v !== was) try { el.rcnFrameFn(R.frame(el), v === 'fit') } catch (err) { console.warn('rcn-frame:', err) }
+      })
+    }
+    // Hand pan and zoom on an element, for items without their own (the timeline
+    // and the drawing; the map has Leaflet's). Only while on() says so. Drag pans,
+    // pinch or ⌘/Ctrl-scroll zooms about the pointer, double-click shows the whole.
+    // A drag swallows the click that ends it, so it never counts as a click on a box.
+    // h: {on(), pan(dxPx, dyPx), zoom(factor, xPx, yPx), reset()}; positions are
+    // relative to the element's top-left corner.
+    R.handView = function (box, h) {
+      if (box.rcnHand) { box.rcnHand = h; return }
+      box.rcnHand = h
+      let drag = null, moved = false
+      box.addEventListener('pointerdown', e => {
+        if (!box.rcnHand.on() || e.button !== 0) return
+        drag = { x: e.clientX, y: e.clientY, id: e.pointerId }; moved = false
+      })
+      box.addEventListener('pointermove', e => {
+        if (!drag || e.pointerId !== drag.id) return
+        const dx = e.clientX - drag.x, dy = e.clientY - drag.y
+        if (!moved && Math.hypot(dx, dy) < 4) return
+        if (!moved) { moved = true; try { box.setPointerCapture(e.pointerId) } catch (err) {} box.style.cursor = 'grabbing' }
+        drag.x = e.clientX; drag.y = e.clientY
+        box.rcnHand.pan(dx, dy)
+      })
+      const up = () => { if (drag) { drag = null; box.style.cursor = '' } }
+      box.addEventListener('pointerup', up); box.addEventListener('pointercancel', up)
+      box.addEventListener('click', e => { if (moved) { moved = false; e.stopPropagation(); e.preventDefault() } }, true)
+      box.addEventListener('wheel', e => {
+        if (!box.rcnHand.on() || !(e.ctrlKey || e.metaKey)) return   // a plain scroll still scrolls the wiki page
+        e.preventDefault()
+        const r = box.getBoundingClientRect()
+        box.rcnHand.zoom(Math.exp(-e.deltaY * (e.deltaMode ? 0.05 : 0.002) * (e.ctrlKey ? 10 : 1)), e.clientX - r.left, e.clientY - r.top)   // a pinch arrives as ctrl+wheel in small steps
+      }, { passive: false })
+      box.addEventListener('dblclick', e => { if (box.rcnHand.on()) { e.preventDefault(); e.stopPropagation(); box.rcnHand.reset() } }, true)
+    }
     // "⧉ Open together": the Time Place Causality Explorer on an item's set file
     // (item.set). A bare file name lives in the site's /assets/NDC/ folder beside
     // the explorer and the full tools; a full address may point anywhere, and the
@@ -331,15 +405,19 @@
   }
 
   // i === null: no walk, everything back to normal.
+  // Whole (the Whole / Step switch, rcn-lineup-follow): steps light boxes where they
+  // are; the view is the whole drawing or wherever you have dragged and zoomed it.
+  const isWhole = $item => !!(RL && RL.whole && RL.whole($item.get(0)))
   function showWalkStep($item, g, walk, i) {
     const svg = $item.find('svg').get(0)
     if (!svg) return
+    const hold = isWhole($item)
     svg.querySelectorAll('.rcn-walk-ring').forEach(el => el.remove())
     $item.find('.graph-box').css('max-height', i === null ? '280px' : 'none')
     if (i === null) {
       g.nodes.forEach(n => { const el = groupFor(svg, 'node', n.id); if (el) el.style.opacity = '' })
       g.edges.forEach(e => { const el = groupFor(svg, 'edge', e.id); if (el) el.style.opacity = '' })
-      walkZoom(svg, null)
+      if (!hold) walkZoom(svg, null)
       return
     }
     const seen = { nodes: new Set(), edges: new Set() }
@@ -358,7 +436,7 @@
       const el = groupFor(svg, 'edge', e.id)
       if (el) el.style.opacity = op('edges', String(e.id))
     })
-    walkZoom(svg, lit ? [...lit.nodes].map(id => groupFor(svg, 'node', id)).filter(Boolean) : null)
+    if (!hold) walkZoom(svg, lit ? [...lit.nodes].map(id => groupFor(svg, 'node', id)).filter(Boolean) : null)
   }
 
   // Voice and speed are the listener's: kept in this browser, the same keys the Graph Tool uses.
@@ -519,7 +597,7 @@
     const op = id => RL.op(f, String(id))
     g.nodes.forEach(n => { const el = groupFor(svg, 'node', n.id); if (el) el.style.opacity = String(op(n.id)) })
     g.edges.forEach(e => { const el = groupFor(svg, 'edge', e.id); if (el) el.style.opacity = String(Math.min(op(e.src), op(e.tgt))) })
-    walkZoom(svg, [...f.lit].map(id => groupFor(svg, 'node', id)).filter(Boolean))
+    if (!isWhole($item) || f.click) walkZoom(svg, [...f.lit].map(id => groupFor(svg, 'node', id)).filter(Boolean))   // a click brings it into view even on Whole
   }
 
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
@@ -535,6 +613,7 @@
           <div style="padding:6px 0 0;display:flex;gap:6px;justify-content:center;">
             <button class="edit-graph" style="cursor:pointer;">Edit in Graph Tool ↗</button>
             ${RL ? RL.togetherButton(item) : ''}
+            ${RL && RL.frameSwitch ? RL.frameSwitch('sketch') : ''}
           </div>
           ${buildBar(item)}
           ${walkBar(item)}
@@ -745,7 +824,7 @@
     })
     $item.on('dblclick', e => {
       // Stepping a build or a walk is quick clicking — never let it open the editor.
-      if ($(e.target).closest('.build-bar, .walk-bar').length) return
+      if ($(e.target).closest('.build-bar, .walk-bar, .rcn-frame').length) return
       wiki.textEditor($item, item)
     })
     // Build playback. Namespaced and reset, because a save re-runs bind.
@@ -841,6 +920,39 @@
       walkUI()
     }
     wk.end = walkEnd
+    // Whole / Step (rcn-lineup-follow). Whole and ⤢ show the whole drawing; Step
+    // frames what is lit now. In Whole the drawing is yours to pan and zoom.
+    if (RL && RL.bindFrame && $item.find('.graph-box svg').length) {
+      const svgNow = () => $item.find('.graph-box svg').get(0)
+      RL.bindFrame(elG, 'sketch', (fr, fit) => {
+        const g = graphModel(item), svg = svgNow()
+        if (!g || !svg) return
+        if (fr === 'whole' || fit) { walkZoom(svg, null); return }
+        if (wk.w !== null) showWalkStep($item, g, curWalk(), wk.i)
+        else if (elG.rcnFollow && elG.rcnFollow.lit) showFollow($item, g, elG.rcnFollow)
+      })
+      const vb = svg => (svg.getAttribute('viewBox') || svg.__fullViewBox || '0 0 1000 600').split(/[\s,]+/).map(Number)
+      const put = (svg, v) => { svg.__zoomId = (svg.__zoomId || 0) + 1; svg.setAttribute('viewBox', v.join(' ')) }   // also stops a zoom still easing in
+      RL.handView($item.find('.graph-box').get(0), {
+        on: () => isWhole($item) && !!svgNow(),
+        pan: (dx, dy) => {
+          const svg = svgNow(), v = vb(svg), r = svg.getBoundingClientRect()
+          if (!svg.__fullViewBox) svg.__fullViewBox = v.join(' ')
+          const k = Math.max(v[2] / r.width, v[3] / r.height)
+          put(svg, [v[0] - dx * k, v[1] - dy * k, v[2], v[3]])
+        },
+        zoom: (f, x, y) => {
+          const svg = svgNow(), v = vb(svg), r = svg.getBoundingClientRect(), box = svg.parentNode.getBoundingClientRect()
+          if (!svg.__fullViewBox) svg.__fullViewBox = v.join(' ')
+          const full = svg.__fullViewBox.split(/[\s,]+/).map(Number)
+          const k = Math.max(v[2] / r.width, v[3] / r.height)
+          const px = v[0] + (x + box.left - r.left) * k, py = v[1] + (y + box.top - r.top) * k   // the drawing's point under the pointer
+          const w = Math.max(full[2] / 20, Math.min(full[2] * 2, v[2] / f)), s = w / v[2]
+          put(svg, [px - (px - v[0]) * s, py - (py - v[1]) * s, w, v[3] * s])
+        },
+        reset: () => { const svg = svgNow(); if (svg) walkZoom(svg, null) }
+      })
+    }
     // Follow the other timeline, map and drawing items in the lineup, and the full
     // tools in other tabs. A walk played elsewhere stops this one (and a build);
     // a click elsewhere is ignored while either is open. A box is lit by its own
