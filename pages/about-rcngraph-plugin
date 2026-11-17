@@ -32,6 +32,16 @@
       "text": "Walks: a diagram can also carry walks, written in the Graph Tool (press Walk there to play, edit or record one). A walk is a list of steps, each with a sentence or two and the part of the diagram it is about. The item shows a ▶ Walk button: each step lights its part, fades the rest, zooms in so a narrow column can read it, and says the words aloud with the browser’s own voice while showing them as a caption. Space pauses, ◀ ▶ or the arrow keys step, Esc stops, and clicking the drawing pauses so you can look. A walk stops at its questions so a group can talk. Voice off shows the words only. The voice and its speed are chosen in the Graph Tool and remembered by your browser."
     },
     {
+      "type": "paragraph",
+      "id": "f2b474457cb3f7bd",
+      "text": "Following. Put this page in a lineup beside pages with an RCN timeline, map or drawing, and the items follow each other. Press ▶ Walk in any of them: each step lights what it is about there, and the others light what is related to it: full strength for this step, half for earlier steps, the rest faded. Click a box and the timeline lights the bars about it, and the map their places. The others light where it is for them. Click empty space to let go. The timeline's bars are the bridges: each bar names a place on the map (place) and a box in the drawing (eip). One walk plays at a time, and starting one stops the others. A click that lights nothing beside it opens its page as before; beside items that follow, the page opens at the end of the lineup so they stay open, and shift-click always opens it. The full Timeline, Map and Graph Tool, opened from this wiki's assets in another tab, follow too, and lead too."
+    },
+    {
+      "type": "paragraph",
+      "id": "eb1078f31385e806",
+      "text": "Opening the explorer. Give the item a set field naming a set file, for example \"set\": \"superior.set.json\", and it shows a ⧉ Open together button. The button opens the Time Place Causality Explorer, which puts the timeline, the map and the sketch side by side on one page. A bare file name means the site's /assets/NDC/ folder, where the explorer and the full tools sit; a full address can point to a set anywhere."
+    },
+    {
       "type": "rcngraph",
       "id": "8d4e2a7f1c9b3065",
       "text": ""
@@ -186,6 +196,28 @@
         "text": "Developed by Marc Pierson with Claude Sonnet 4.6 (Anthropic) for the ReLocalize Creativity Network. Build playback and walks added October 2026 with Claude Opus 5.5. Source: [https://github.com/marpie1/wiki-plugin-rcngraph GitHub]. Published on npm as wiki-plugin-rcngraph."
       },
       "date": 1792602075758
+    },
+    {
+      "type": "add",
+      "id": "f2b474457cb3f7bd",
+      "item": {
+        "type": "paragraph",
+        "id": "f2b474457cb3f7bd",
+        "text": "Following. Put this page in a lineup beside pages with an RCN timeline, map or drawing, and the items follow each other. Press ▶ Walk in any of them: each step lights what it is about there, and the others light what is related to it: full strength for this step, half for earlier steps, the rest faded. Click a box and the timeline lights the bars about it, and the map their places. The others light where it is for them. Click empty space to let go. The timeline's bars are the bridges: each bar names a place on the map (place) and a box in the drawing (eip). One walk plays at a time, and starting one stops the others. A click that lights nothing beside it opens its page as before; beside items that follow, the page opens at the end of the lineup so they stay open, and shift-click always opens it. The full Timeline, Map and Graph Tool, opened from this wiki's assets in another tab, follow too, and lead too."
+      },
+      "after": "8e7e435485d56e9e",
+      "date": 1794193621097
+    },
+    {
+      "type": "add",
+      "id": "eb1078f31385e806",
+      "item": {
+        "type": "paragraph",
+        "id": "eb1078f31385e806",
+        "text": "Opening the explorer. Give the item a set field naming a set file, for example \"set\": \"superior.set.json\", and it shows a ⧉ Open together button. The button opens the Time Place Causality Explorer, which puts the timeline, the map and the sketch side by side on one page. A bare file name means the site's /assets/NDC/ folder, where the explorer and the full tools sit; a full address can point to a set anywhere."
+      },
+      "after": "f2b474457cb3f7bd",
+      "date": 1794195627668
     }
   ]
 }

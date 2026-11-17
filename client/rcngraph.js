@@ -1,5 +1,178 @@
 (function () {
 
+  // BEGIN rcn-lineup-follow — pasted from tools/rcn-lineup-follow.js by tools/paste-lineup-follow.js. Edit that file, never this block.
+  /* rcn-lineup-follow — the timeline, map and drawing items on a wiki page follow
+   * each other, across the whole lineup and into the full tools open in other tabs.
+   *
+   * ONE SOURCE. tools/paste-lineup-follow.js pastes this file into the three
+   * plugins (rcntimeline, rcnmap, rcngraph) between the BEGIN/END marker lines,
+   * so each plugin stays one file. Edit this file, then run
+   *   node tools/paste-lineup-follow.js
+   *
+   * WHY IT IS EASY ON A WIKI. A FedWiki lineup is one browser document: every
+   * page beside the others is a .page inside .main, even pages from other sites.
+   * So items on different pages can call each other directly. The first plugin
+   * to load makes window.rcnLineup; the others use it.
+   *
+   * WHAT GOES OUT. The same two messages the full tools send (tools/rcn-switch.js):
+   *   { type:'rcn-walk',   src, lead, k, all, label, ids, places, eips }   a walk step
+   *   { type:'rcn-walk',   src, lead, k, end:true }                        the walk stopped
+   *   { type:'rcn-follow', src, k, click:true, id, place, eip, ids, places, eips, clear? }
+   * ids are timeline bars, places map points, eips drawing nodes. The sender
+   * widens what it lights one hop through every timeline in the lineup: each bar
+   * names a place and a node, so a map step on the Magma mine lights the Magma
+   * bars and the Magma Copper box. x:1 marks a message already widened.
+   *
+   * HOW IT TRAVELS. As a bubbling DOM event 'rcnwalkStream' from the item (the
+   * naming FedWiki's Frame plugin uses for its LINEUP topics), heard once at the
+   * document and handed to every joined item but the sender; and over the
+   * BroadcastChannel 'rcn-follow', where the full tools of the same site listen.
+   *
+   * Marc Pierson with Claude Opus 5.5, Nov 2026. MIT licence.
+   */
+  const RL = (function () {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return null
+    if (window.rcnLineup) return window.rcnLineup
+    const R = window.rcnLineup = { v: 1, members: [], heard: {} }
+    const CH = ('BroadcastChannel' in window) ? new BroadcastChannel('rcn-follow') : null
+    const none = () => ({ ids: [], places: [], eips: [] })
+
+    // The bridges: every bar of every timeline item in the lineup.
+    R.bars = function () {
+      const out = []
+      document.querySelectorAll('.rcntimeline-source').forEach(el => {
+        if (!el.timelineData) return
+        try {
+          (el.timelineData().intervals || []).forEach(iv => {
+            const x = iv.extra || {}
+            out.push({ id: String(iv.id), place: iv.place || x.place || null, eip: iv.eip || x.eip || null })
+          })
+        } catch (e) {}
+      })
+      return out
+    }
+    // One hop: a bar named, or at a lit place, or about a lit node, adds its bar, place and node.
+    R.expand = function (o) {
+      const I = {}, P = {}, E = {}, i0 = {}, p0 = {}, e0 = {}
+      ;(o.ids || []).filter(Boolean).forEach(x => { I[x] = i0[x] = 1 })
+      ;(o.places || []).filter(Boolean).forEach(x => { P[x] = p0[x] = 1 })
+      ;(o.eips || []).filter(Boolean).forEach(x => { E[x] = e0[x] = 1 })
+      R.bars().forEach(b => {
+        if (i0[b.id] || (b.place && p0[b.place]) || (b.eip && e0[b.eip])) {
+          I[b.id] = 1; if (b.place) P[b.place] = 1; if (b.eip) E[b.eip] = 1
+        }
+      })
+      return { ids: Object.keys(I), places: Object.keys(P), eips: Object.keys(E) }
+    }
+
+    // An item joins: fn(m) hears the others and returns true when it lit something.
+    // Joining again (a redraw) replaces the item's old listener.
+    R.join = function (el, src, fn) {
+      R.members = R.members.filter(x => x.el !== el && document.contains(x.el))
+      R.members.push({ el, src, fn })
+    }
+    R.others = el => R.members.filter(x => x.el !== el && document.contains(x.el)).length
+
+    function deliver (m, fromEl) {
+      if (!m || !m.k || R.heard[m.k]) return 0
+      R.heard[m.k] = 1
+      R.members = R.members.filter(x => document.contains(x.el))
+      let n = 0
+      R.members.slice().forEach(x => {
+        if (x.el === fromEl) return
+        try { if (x.fn(m)) n++ } catch (e) { console.warn('rcn-lineup-follow:', e) }
+      })
+      return n
+    }
+    // Returns how many items in this lineup lit something.
+    function send (el, m) {
+      m.k = Date.now() + ':' + Math.random()
+      let n = 0
+      try {
+        const ev = new CustomEvent('rcnwalkStream', { bubbles: true, detail: m })
+        el.dispatchEvent(ev)
+        n = ev.rcnLit || 0
+      } catch (e) {}
+      try { if (CH) CH.postMessage(m) } catch (e) {}
+      return n
+    }
+    document.addEventListener('rcnwalkStream', e => { e.rcnLit = deliver(e.detail, e.target) })
+    // The full tools in other tabs: their walks come widened through their set;
+    // their clicks name one thing, so widen those here.
+    if (CH) CH.addEventListener('message', ev => {
+      const m = ev.data
+      if (!m || !m.k) return
+      if (m.type === 'rcn-walk') { deliver(m, null); return }
+      if (m.type !== 'rcn-follow' || !m.click) return
+      if (m.x) { deliver(m, null); return }
+      const x = m.id ? R.expand({ ids: m.src === 'timeline' ? [m.id] : [], places: [m.place], eips: [m.eip] }) : none()
+      deliver(Object.assign({}, m, x, { x: 1, clear: !m.id }), null)
+    })
+
+    // A step of this item's walk. o: {ids|places|eips: [...], all, label}
+    R.step = function (el, src, o) {
+      if (!el.rcnLead) el.rcnLead = src + ':' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
+      const x = o.all ? none() : R.expand(o)
+      return send(el, Object.assign({ type: 'rcn-walk', src, lead: el.rcnLead, all: !!o.all, pointer: false, label: o.label || null, x: 1 }, x))
+    }
+    // This item's walk stopped. Sends nothing if it was not leading.
+    R.end = function (el, src) {
+      if (!el.rcnLead) return
+      const lead = el.rcnLead
+      el.rcnLead = null
+      send(el, { type: 'rcn-walk', src, lead, end: true })
+    }
+    // A click on one thing, or {clear:true} to let go. o: {id} for a bar (it
+    // lights the bar's own place and node), {place} for a map point (the bars there
+    // and their nodes), {eip} for a drawing box (the bars about it and their places).
+    // Returns how many items in this lineup lit something.
+    R.click = function (el, src, o) {
+      el.rcnClicked = !o.clear
+      const x = o.clear ? none() : R.expand({ ids: o.id ? [o.id] : [], places: [o.place], eips: [o.eip] })
+      const bar = o.id && R.bars().find(b => b.id === String(o.id))
+      return send(el, Object.assign({ type: 'rcn-follow', src, click: true, clear: !!o.clear,
+        id: o.clear ? null : (o.id || o.place || o.eip || null), label: o.label || null,
+        place: o.place || (bar && bar.place) || null, eip: o.eip || (bar && bar.eip) || null, x: 1 }, x))
+    }
+
+    // A follower's state after hearing m. f: {lead, lit:Set|null, seen:Set, click}
+    // or null. mine: the ids of this item that m names. Returns the new state; the
+    // same object means nothing changes (a step about nothing here leaves it be).
+    R.update = function (f, m, mine) {
+      if (m.type === 'rcn-walk' && m.end) return f && f.lead === m.lead ? null : f
+      if (m.type === 'rcn-follow' && m.clear) return f && f.click ? null : f
+      const same = f && m.lead && f.lead === m.lead
+      if (m.all) return { lead: m.lead || null, lit: null, seen: same ? f.seen : new Set(), click: false }
+      if (!mine.length) return f
+      const seen = same ? new Set([...f.seen, ...(f.lit || [])]) : new Set()
+      return { lead: m.lead || null, lit: new Set(mine), seen, click: m.type === 'rcn-follow' }
+    }
+    // How strongly to draw one thing: lit full, seen half, the rest faded
+    // (less faded after a click than in a walk).
+    R.op = function (f, id) {
+      if (!f || !f.lit || f.lit.has(id)) return 1
+      if (f.seen.has(id)) return 0.42
+      return f.click ? 0.3 : 0.13
+    }
+    // "⧉ Open together": the Time Place Causality Explorer on an item's set file
+    // (item.set). A bare file name lives in the site's /assets/NDC/ folder beside
+    // the explorer and the full tools; a full address may point anywhere, and the
+    // explorer is then looked for in that set's own folder. A local wiki opens the
+    // working copy on :8765.
+    R.together = function (set) {
+      const local = /(^|\.)localhost$/.test(location.hostname)
+      const s = new URL(set, location.origin + '/assets/NDC/')
+      const page = local ? 'http://localhost:8765/tools/rcn-together.html' : new URL('rcn-together.html', s).href
+      return page + '?set=' + encodeURIComponent(new URL(page).origin === s.origin ? s.pathname : s.href)
+    }
+    R.togetherButton = item => item && typeof item.set === 'string' && item.set.trim()
+      ? '<button class="rcn-together" style="cursor:pointer;font-size:12px;padding:2px 8px" title="Open this with its timeline, map and sketch side by side in the Time Place Causality Explorer">⧉ Open together ↗</button>'
+      : ''
+    R.openTogether = item => { const w = window.open(R.together(item.set.trim()), 'rcntogether'); if (w) try { w.focus() } catch (e) {} }
+    return R
+  })()
+  // END rcn-lineup-follow
+
   // Farm sites are alice.localhost, scp-experiment.localhost, … so match the suffix,
   // not the bare hostname. Local wikis get the working copy off the sofi-proxy static
   // server; everything else gets the deployed asset.
@@ -335,6 +508,20 @@
           </div>`
   }
 
+  // Following another item in the lineup (see rcn-lineup-follow): the boxes it
+  // lights here at full strength, an arrow between two of them too, what it lit
+  // before at half, the rest faded; the drawing zooms towards the lit boxes.
+  function showFollow($item, g, f) {
+    const svg = $item.find('svg').get(0)
+    if (!svg) return
+    svg.querySelectorAll('.rcn-walk-ring').forEach(el => el.remove())
+    $item.find('.graph-box').css('max-height', 'none')
+    const op = id => RL.op(f, String(id))
+    g.nodes.forEach(n => { const el = groupFor(svg, 'node', n.id); if (el) el.style.opacity = String(op(n.id)) })
+    g.edges.forEach(e => { const el = groupFor(svg, 'edge', e.id); if (el) el.style.opacity = String(Math.min(op(e.src), op(e.tgt))) })
+    walkZoom(svg, [...f.lit].map(id => groupFor(svg, 'node', id)).filter(Boolean))
+  }
+
   function esc(s) { return String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c])) }
 
   function renderContent($item, item) {
@@ -347,6 +534,7 @@
           </div>
           <div style="padding:6px 0 0;display:flex;gap:6px;justify-content:center;">
             <button class="edit-graph" style="cursor:pointer;">Edit in Graph Tool ↗</button>
+            ${RL ? RL.togetherButton(item) : ''}
           </div>
           ${buildBar(item)}
           ${walkBar(item)}
@@ -548,6 +736,7 @@
   function bind($item, item) {
     aboutMark($item, 'rcngraph')
     bindNotes($item, item)
+    $item.on('click', '.rcn-together', e => { e.stopPropagation(); RL.openTogether(item) })
     $item.on('click', '.open-graph, .edit-graph', () => {
       pendingItem = item
       pending$item = $item
@@ -588,6 +777,7 @@
     // Walk playback. w === null: no walk open. token guards every voice callback,
     // so a step that was skipped or stopped can never move the walk on.
     const wk = { w: null, i: 0, playing: false, token: 0, heard: null }
+    const elG = $item.get(0)
     const curWalk = () => { const g = graphModel(item); return g && wk.w !== null ? walkList(g)[wk.w] : null }
     const stopVoice = () => { wk.token++; recHush(); try { if (window.speechSynthesis) speechSynthesis.cancel() } catch (e) {} }
     const walkUI = note => {
@@ -612,8 +802,10 @@
       if (!walk) return
       wk.i = Math.max(0, Math.min(walk.steps.length - 1, i))
       stopVoice()
+      elG.rcnFollow = null   // leading now, not following
       showWalkStep($item, g, walk, wk.i)
       const st = walk.steps[wk.i]
+      if (RL) { const lit = stepLit(g, st); RL.step(elG, 'sketch', { eips: lit ? [...lit.nodes] : [], all: !lit, label: walk.name }) }
       $item.find('.walk-say').text(st.say || '').css({ color: st.ask ? '#7c2d12' : '#1e1b4b', fontStyle: st.ask ? 'italic' : 'normal' })
       walkUI()
       if (wk.playing) walkSpeak()
@@ -645,9 +837,43 @@
       if (g) showWalkStep($item, g, null, null)
       wk.w = null
       if (activeWalk === wk) activeWalk = null
+      if (RL) RL.end(elG, 'sketch')
       walkUI()
     }
     wk.end = walkEnd
+    // Follow the other timeline, map and drawing items in the lineup, and the full
+    // tools in other tabs. A walk played elsewhere stops this one (and a build);
+    // a click elsewhere is ignored while either is open. A box is lit by its own
+    // id, as a drawing node or as a place (a sketch area and its map area share one id).
+    if (RL) RL.join(elG, 'sketch', msg => {
+      const g = graphModel(item)
+      if (!g || !$item.find('svg').length) return false
+      const walkStep = msg.type === 'rcn-walk' && !msg.end
+      if (wk.w !== null) { if (!walkStep) return false; walkEnd() }
+      if (buildIdx !== null) { if (!walkStep) return false; buildIdx = null; showBuildStep($item, g, null) }
+      const have = new Set(g.nodes.map(n => String(n.id)))
+      const mine = [...new Set([...(msg.eips || []), ...(msg.places || [])])].map(String).filter(id => have.has(id))
+      const was = elG.rcnFollow || null, f = RL.update(was, msg, mine)
+      if (f === was) return false
+      elG.rcnFollow = f
+      if (f && f.lit) showFollow($item, g, f); else showWalkStep($item, g, null, null)
+      return !!(f && f.lit)
+    })
+    // A click on a box lights it in the items beside it. Its label still opens its
+    // page when nothing beside it lights up; shift-click always opens the page, at
+    // the end of the lineup. A click on the empty drawing lets go.
+    const nodeOf = t => { const n = t && t.closest && t.closest('g[id^="node-"]'); return n ? n.id.slice(5) : null }
+    const followNode = (id, label) => {
+      if (!RL || wk.w !== null || buildIdx !== null) return 0
+      if (elG.rcnFollow) { elG.rcnFollow = null; showWalkStep($item, graphModel(item), null, null) }
+      return RL.click(elG, 'sketch', { eip: id, label })
+    }
+    $item.off('click.rcnfollow').on('click.rcnfollow', '.graph-box svg', e => {
+      if ($(e.target).closest('a.internal').length) return
+      const id = nodeOf(e.target)
+      if (id) followNode(id)
+      else if (RL && elG.rcnClicked) RL.click(elG, 'sketch', { clear: true })
+    })
     $item.off('.rcnwalk')
     $item.on('click.rcnwalk', '.walk-start', () => {
       const g = graphModel(item)
@@ -713,8 +939,10 @@
     $item.off('click.rcnlink').on('click.rcnlink', 'svg a.internal', e => {
       e.preventDefault()
       e.stopPropagation()
-      const title = e.currentTarget.getAttribute('data-title')
-      if (title) wiki.doInternalLink(title, e.shiftKey ? null : $item.parents('.page:first'))
+      const title = e.currentTarget.getAttribute('data-title'), id = nodeOf(e.currentTarget)
+      if (!e.shiftKey && id && followNode(id, title)) return
+      // beside items that follow, open it at the end so they stay open
+      if (title) wiki.doInternalLink(title, e.shiftKey || (RL && RL.others(elG)) ? null : $item.parents('.page:first'))
     })
   }
 
