@@ -47,6 +47,11 @@
       "text": "Whole or Step. Beside the item's buttons, Whole · Step says what this drawing does while a walk plays, its own or one it follows. Step zooms in on what each step is about. Whole keeps the whole drawing, or wherever you have put it: each step lights its boxes where they are. In Whole, drag the drawing to move it, pinch or ⌘-scroll to zoom, and double-click (or ⤢) to see all of it again. A click on the timeline or the map beside it still brings the drawing to that box. You can switch at any time, in the middle of a walk too, and the choice is remembered in your browser. The Time Place Causality Explorer has the same switch on each of its panes."
     },
     {
+      "type": "paragraph",
+      "id": "ecb9f84f879a449a",
+      "text": "Hover text. The 💬 Hover text button beside the item's buttons turns off the text that pops up when the pointer rests on a bar, a point or a box, in every timeline, map and drawing item on the pages open beside each other, and turns it back on. Turn it off when a room is watching a walk, so a stray pointer doesn't keep covering the picture. Clicks work as before. Your browser remembers the choice. The Time Place Causality Explorer has the same switch in its header."
+    },
+    {
       "type": "rcngraph",
       "id": "8d4e2a7f1c9b3065",
       "text": ""
@@ -234,6 +239,17 @@
       },
       "after": "eb1078f31385e806",
       "date": 1794945537905
+    },
+    {
+      "type": "add",
+      "id": "ecb9f84f879a449a",
+      "item": {
+        "type": "paragraph",
+        "id": "ecb9f84f879a449a",
+        "text": "Hover text. The 💬 Hover text button beside the item's buttons turns off the text that pops up when the pointer rests on a bar, a point or a box, in every timeline, map and drawing item on the pages open beside each other, and turns it back on. Turn it off when a room is watching a walk, so a stray pointer doesn't keep covering the picture. Clicks work as before. Your browser remembers the choice. The Time Place Causality Explorer has the same switch in its header."
+      },
+      "after": "149c044870cee1eb",
+      "date": 1794946159593
     }
   ]
 }

@@ -228,6 +228,45 @@
       }, { passive: false })
       box.addEventListener('dblclick', e => { if (box.rcnHand.on()) { e.preventDefault(); e.stopPropagation(); box.rcnHand.reset() } }, true)
     }
+    // Hover text on or off for the whole lineup (Nov 17 2026): the text that pops
+    // up when the pointer rests on a bar, a point or a box, in every timeline, map
+    // and drawing item at once. Off suits a room watching a walk, where a stray
+    // pointer keeps covering the picture. Any item's 💬 button flips it for all;
+    // remembered in this browser. body.rcn-lineup-nohover hides the map's
+    // tooltips; the timeline and the drawing ask R.hoverOff() and redraw.
+    const HOVER_KEY = 'rcnLineupHover', hoverFns = []
+    R.hoverOff = () => document.body.classList.contains('rcn-lineup-nohover')
+    const hoverHTML = () => {
+      const off = R.hoverOff()
+      return `💬 Hover text: ${off ? 'off' : 'on'}`
+    }
+    R.hoverSwitch = () => `<button class="rcn-hover" aria-pressed="${!R.hoverOff()}" style="cursor:pointer;font-size:12px;padding:2px 8px;${R.hoverOff() ? 'color:#64748b;text-decoration:line-through;' : ''}" title="The text that pops up when the pointer rests on a bar, a point or a box, in every timeline, map and drawing on these pages. Turn it off when a room is watching a walk.">${hoverHTML()}</button>`
+    // fn(on) redraws an item for the new setting; el is the item, so a removed item is let go.
+    R.onHover = (el, fn) => { for (let i = hoverFns.length - 1; i >= 0; i--) if (hoverFns[i].el === el || !document.contains(hoverFns[i].el)) hoverFns.splice(i, 1); hoverFns.push({ el, fn }) }
+    const hoverApply = off => {
+      document.body.classList.toggle('rcn-lineup-nohover', off)
+      document.querySelectorAll('.rcn-hover').forEach(b => { b.outerHTML = R.hoverSwitch() })
+      hoverFns.forEach(h => { if (document.contains(h.el)) try { h.fn(!off) } catch (e) { console.warn('rcn-hover:', e) } })
+    }
+    {
+      const css = document.createElement('style')
+      css.textContent = 'body.rcn-lineup-nohover .rcnmap .leaflet-tooltip{display:none!important}'
+      document.head.appendChild(css)
+      let off = false
+      try { off = localStorage.getItem(HOVER_KEY) === 'off' } catch (e) {}
+      const go = () => document.body.classList.toggle('rcn-lineup-nohover', off)
+      if (document.body) go(); else document.addEventListener('DOMContentLoaded', go)
+      document.addEventListener('click', e => {
+        const b = e.target.closest && e.target.closest('.rcn-hover')
+        if (!b) return
+        e.stopPropagation()
+        const nowOff = !R.hoverOff()
+        try { localStorage.setItem(HOVER_KEY, nowOff ? 'off' : 'on') } catch (err) {}
+        hoverApply(nowOff)
+      }, true)
+      // Another tab of this wiki flipped it: follow.
+      window.addEventListener('storage', e => { if (e.key === HOVER_KEY) hoverApply(e.newValue === 'off') })
+    }
     // "⧉ Open together": the Time Place Causality Explorer on an item's set file
     // (item.set). A bare file name lives in the site's /assets/NDC/ folder beside
     // the explorer and the full tools; a full address may point anywhere, and the
@@ -614,6 +653,7 @@
             <button class="edit-graph" style="cursor:pointer;">Edit in Graph Tool ↗</button>
             ${RL ? RL.togetherButton(item) : ''}
             ${RL && RL.frameSwitch ? RL.frameSwitch('sketch') : ''}
+            ${RL && RL.hoverSwitch ? RL.hoverSwitch() : ''}
           </div>
           ${buildBar(item)}
           ${walkBar(item)}
@@ -746,6 +786,7 @@
     const show = (gEl, ev) => {
       if (editing) return
       clearTimeout(hideT)
+      if (RL && RL.hoverOff && RL.hoverOff()) { close(); return }   // the lineup's Hover text switch (rcn-lineup-follow)
       const kind = gEl.id.startsWith('node-') ? 'node' : 'edge', id = gEl.id.slice(kind.length + 1)
       const { g } = graphOf(item)
       const obj = g && (kind === 'node' ? g.nodes : g.edges).find(o => String(o.id) === id)
@@ -805,6 +846,7 @@
       ta.addEventListener('dblclick', e => e.stopPropagation())
       ta.focus()
     }
+    if (RL && RL.onHover) RL.onHover($item.get(0), on => { if (!on && !editing) close() })
     groups.forEach(gEl => {
       gEl.addEventListener('mouseenter', ev => show(gEl, ev))
       gEl.addEventListener('mousemove', ev => place(ev))
