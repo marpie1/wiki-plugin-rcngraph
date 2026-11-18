@@ -451,7 +451,7 @@
       cur = { state: 'armed', ds: ds, ss: ss, mic: ms, ctx: ctx, meter: meter, peak: 0, frame: frame, stream: new MediaStream(tracks),
               name: name || null, chunks: [], tail: null, from: from };
       if (sys && !(ss && ss.getAudioTracks().length))
-        toast(ss ? 'No computer sound: “Also share system audio” was off. Recording ' + (from.length ? 'the ' + from.join(' and ') : 'no sound') + '.'
+        toast(ss ? 'No computer sound came through. Check that “Also share system audio” is on, and that macOS lets Chrome record system audio (System Settings › Privacy & Security › Screen & System Audio Recording; then quit and reopen Chrome). Recording ' + (from.length ? 'the ' + from.join(' and ') : 'no sound') + '.'
                  : 'Recording without the computer’s sound' + (from.length ? ' — the ' + from.join(' and ') + ' only.' : '.'), 9000);
       vt.addEventListener('ended', function () { stop(false); });   // Chrome's "Stop sharing"
       if (startFn) setTimeout(function () { try { startFn(); } catch (e) { console.warn(e); } }, 150);
