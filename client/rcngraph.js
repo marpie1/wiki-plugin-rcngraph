@@ -94,6 +94,7 @@
         n = ev.rcnLit || 0
       } catch (e) {}
       try { if (CH) CH.postMessage(m) } catch (e) {}
+      try { window.dispatchEvent(new CustomEvent('rcn-walk-local', { detail: m })) } catch (e) {}   // the video recorder
       return n
     }
     document.addEventListener('rcnwalkStream', e => { e.rcnLit = deliver(e.detail, e.target) })
@@ -114,6 +115,14 @@
       if (!el.rcnLead) el.rcnLead = src + ':' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6)
       const x = o.all ? none() : R.expand(o)
       return send(el, Object.assign({ type: 'rcn-walk', src, lead: el.rcnLead, all: !!o.all, pointer: false, label: o.label || null, x: 1 }, x))
+    }
+    // This item's walk has read its last step (it stays open there). Only the
+    // video recorder (tools/rcn-record.js) listens; the items don't follow it.
+    R.done = function (el, src) {
+      if (!el.rcnLead) return
+      const m = { type: 'rcn-walk-done', src, lead: el.rcnLead, k: Date.now() + ':' + Math.random() }
+      try { if (CH) CH.postMessage(m) } catch (e) {}
+      try { window.dispatchEvent(new CustomEvent('rcn-walk-local', { detail: m })) } catch (e) {}
     }
     // This item's walk stopped. Sends nothing if it was not leading.
     R.end = function (el, src) {
@@ -285,6 +294,236 @@
     return R
   })()
   // END rcn-lineup-follow
+
+  // BEGIN rcn-record — pasted from tools/rcn-record.js by tools/paste-lineup-follow.js. Edit that file, never this block.
+/* rcn-record.js — record a walk as a video file to share.
+ *
+ * ONE SOURCE. tools/paste-switch.js pastes this file into the Graph Tool, the
+ * Map, the Timeline and the Time Place Causality Explorer (rcn-together.html),
+ * between BEGIN/END marker lines. Edit this file, then run
+ *   node tools/paste-switch.js
+ *
+ * WHAT THE READER DOES. In a tool's list of walks, each walk has a "● Video"
+ * button. In the Explorer, the header has "● Record video". A small panel
+ * explains what will happen; Start asks Chrome to share this tab (Chrome
+ * shows its own "share this tab?" box — tick "Also share tab audio" so
+ * recorded voices are in the video). Then:
+ *
+ *   - in a tool, the walk starts by itself;
+ *   - in the Explorer, the reader clicks ▶ on a walk in any pane.
+ *
+ * Recording begins with the walk's first step, so the video opens on the walk,
+ * not on the reader finding the button. It ends by itself a moment after the
+ * last step has been read, or when the walk is closed (✕ or Esc), or when the
+ * reader clicks Chrome's "Stop sharing". The video downloads as
+ *   <walk name> — <date>.mp4      (.webm where Chrome can't write .mp4)
+ *
+ * WHAT IS IN THE PICTURE. The whole tab, minus the ⇄ bar and this file's own
+ * panels. In the Explorer, only the three panes (Chrome's Region Capture
+ * crops off the header). A pane popped out to its own window is not in the
+ * Explorer's video.
+ *
+ * WHAT IS IN THE SOUND. Whatever this tab plays: people's recorded voices and
+ * AI voices (step.voices). NOT the Mac's own computer voice — Chrome hands that
+ * to the Mac to speak, outside the tab, and tab sharing can't hear it. The
+ * panel's microphone box adds the reader's microphone, to talk over the walk
+ * or to let it pick up the computer voice from the speakers.
+ *
+ * HOW IT KNOWS WHERE THE WALK IS. It listens for the walk messages of
+ * tools/rcn-switch.js: { type:'rcn-walk' } for each step and for the end, and
+ * { type:'rcn-walk-done' } when the last step has been read. They come from
+ * this window (the 'rcn-walk-local' event), from frames (the Explorer's
+ * panes), and over the BroadcastChannel 'rcn-follow' (other tabs).
+ *
+ * Needs Chrome or Edge (getDisplayMedia with preferCurrentTab). In a frame the
+ * buttons don't show: the page around the frame records instead.
+ *
+ * Marc Pierson with Claude Opus 5.5, Nov 2026. MIT licence.
+ */
+;(function () {   // the leading ; keeps it safe after code written without semicolons
+  if (window.RCNRecord) return;   // the wiki plugins each carry a copy; the first one serves the page
+  var R = window.RCNRecord = {
+    can: !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && window.MediaRecorder) && window.top === window,
+    cropEl: null,      // function returning the element to crop the video to (the Explorer's panes), or null for the whole tab
+    open: open,        // open(startFn, name): the panel; Start shares the tab, then calls startFn() (null = wait for a walk)
+    stop: function () { stop(false); }
+  };
+  var cur = null;      // { state:'armed'|'rec', ds, mic, ctx, stream, rec, chunks, name, t0, tail }
+  var TAIL = 2500;     // ms of picture kept after the last step has been read
+
+  function css() {
+    if (document.getElementById('rcn-rec-css')) return;
+    var s = document.createElement('style'); s.id = 'rcn-rec-css';
+    s.textContent =
+      '#rcn-rec-panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100001;width:min(440px,calc(100vw - 32px));' +
+      'background:#fff;color:#1e293b;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.35);padding:18px 20px;font:14px/1.45 system-ui,sans-serif}' +
+      '#rcn-rec-panel h3{margin:0 0 8px;font-size:16px}#rcn-rec-panel p{margin:0 0 10px}#rcn-rec-panel .small{font-size:12.5px;color:#475569}' +
+      '#rcn-rec-panel label{display:flex;gap:8px;align-items:flex-start;margin:4px 0 12px;cursor:pointer}' +
+      '#rcn-rec-panel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}' +
+      '#rcn-rec-panel button,#rcn-rec-wait button{font:inherit;border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:6px 14px;cursor:pointer}' +
+      '#rcn-rec-panel button.go{background:#b91c1c;border-color:#b91c1c;color:#fff;font-weight:600}' +
+      '#rcn-rec-wait,#rcn-rec-toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:100001;background:#fff;color:#1e293b;' +
+      'border-radius:10px;box-shadow:0 2px 14px rgba(0,0,0,.3);padding:8px 14px;font:13px system-ui,sans-serif;display:flex;gap:10px;align-items:center}' +
+      '#rcn-rec-wait b{color:#b91c1c}' +
+      'body.rcn-recording #rcn-switch,body.rcn-recording #rcn-rec-toast{display:none!important}';
+    document.head.appendChild(s);
+  }
+  function el(id) { return document.getElementById(id); }
+  function drop(id) { var e = el(id); if (e) e.remove(); }
+  function esc(s) { return String(s == null ? '' : s).replace(/[&<>"]/g, function (c) { return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]; }); }
+  function toast(msg, ms) {
+    css(); drop('rcn-rec-toast');
+    var t = document.createElement('div'); t.id = 'rcn-rec-toast'; t.textContent = msg;
+    document.body.appendChild(t); setTimeout(function () { if (t.parentNode) t.remove(); }, ms || 6000);
+  }
+  function micPref(v) {
+    try { if (v === undefined) return localStorage.getItem('rcnRecordMic') === '1'; localStorage.setItem('rcnRecordMic', v ? '1' : '0'); } catch (e) {}
+    return false;
+  }
+
+  // ── The panel ─────────────────────────────────────────────────────────
+  function open(startFn, name) {
+    if (!R.can) { toast('Recording a video needs Chrome or Edge, with the tool open in its own tab.'); return; }
+    if (cur) { toast('Already recording — press Esc or close the walk to finish.'); return; }
+    css(); drop('rcn-rec-panel');
+    var p = document.createElement('div'); p.id = 'rcn-rec-panel';
+    p.innerHTML =
+      '<h3>● Record ' + (name ? '“' + esc(name) + '”' : 'a walk') + ' as a video</h3>' +
+      '<p>Chrome will ask to share this tab. Tick <b>Also share tab audio</b> so recorded voices are in the video.</p>' +
+      (startFn ? '<p>The walk then starts by itself. ' : '<p>Then click ▶ on a walk in any pane; recording starts with its first step. ') +
+      'Recording stops at the end of the walk, or when you close it or press Esc. The video goes to your Downloads folder.</p>' +
+      '<label><input type="checkbox" id="rcn-rec-mic"' + (micPref() ? ' checked' : '') + '> <span>Also record my microphone' +
+      '<br><span class="small">To talk over the walk. The Mac’s own computer voice can’t be recorded from the tab; recorded and AI voices can. For the computer voice, tick this and let the microphone hear your speakers.</span></span></label>' +
+      '<div class="row"><button data-x>Cancel</button><button class="go" data-go>● Start recording</button></div>';
+    document.body.appendChild(p);
+    p.querySelector('[data-go]').focus();
+    p.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-x]')) { p.remove(); return; }
+      if (!ev.target.closest('[data-go]')) return;
+      var mic = el('rcn-rec-mic').checked; micPref(mic); p.remove();
+      arm(startFn, name, mic);
+    });
+    p.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); p.remove(); } });
+  }
+
+  // ── Share the tab, then wait for the first step ───────────────────────
+  function arm(startFn, name, mic) {
+    var ds, ms = null;
+    navigator.mediaDevices.getDisplayMedia({
+      video: { frameRate: 30 }, audio: { suppressLocalAudioPlayback: false },
+      preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'
+    }).then(function (s) {
+      ds = s;
+      var vt = ds.getVideoTracks()[0], target = R.cropEl && R.cropEl();
+      if (target && window.CropTarget && vt.cropTo)
+        return CropTarget.fromElement(target).then(function (ct) { return vt.cropTo(ct); }).catch(function (e) { console.warn('rcn-record: crop', e); });
+    }).then(function () {
+      if (mic) return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (m) { ms = m; })
+        .catch(function () { toast('The microphone was refused; recording without it.'); });
+    }).then(function () {
+      var vt = ds.getVideoTracks()[0], tracks = [vt], ctx = null, ins = [];
+      if (ds.getAudioTracks().length) ins.push(new MediaStream(ds.getAudioTracks()));
+      if (ms) ins.push(ms);
+      if (ins.length === 1) tracks.push(ins[0].getAudioTracks()[0]);
+      else if (ins.length > 1) {   // tab sound and microphone, mixed into one track
+        ctx = new AudioContext(); var dest = ctx.createMediaStreamDestination();
+        ins.forEach(function (s) { ctx.createMediaStreamSource(s).connect(dest); });
+        tracks.push(dest.stream.getAudioTracks()[0]);
+      }
+      cur = { state: 'armed', ds: ds, mic: ms, ctx: ctx, stream: new MediaStream(tracks), name: name || null, chunks: [], tail: null,
+              noTabSound: !ds.getAudioTracks().length };
+      vt.addEventListener('ended', function () { stop(false); });   // Chrome's "Stop sharing"
+      if (startFn) setTimeout(function () { try { startFn(); } catch (e) { console.warn(e); } }, 150);
+      else waiting();
+      // A walk that never comes: give the tab back after two minutes.
+      setTimeout(function () { if (cur && cur.state === 'armed') { stop(true); toast('No walk started, so nothing was recorded.'); } }, 120000);
+    }).catch(function (e) {
+      if (ds) ds.getTracks().forEach(function (t) { t.stop(); });
+      if (ms) ms.getTracks().forEach(function (t) { t.stop(); });
+      cur = null;
+      if (e && e.name === 'NotAllowedError') toast('Not recorded: sharing this tab was cancelled.');
+      else { console.warn('rcn-record', e); toast('Could not start recording: ' + (e && e.message || e)); }
+    });
+  }
+  function waiting() {
+    css(); drop('rcn-rec-wait');
+    var w = document.createElement('div'); w.id = 'rcn-rec-wait';
+    w.innerHTML = '<span><b>●</b> Ready to record — start a walk</span><button>Cancel</button>';
+    w.querySelector('button').onclick = function () { stop(true); };
+    document.body.appendChild(w);
+  }
+
+  // ── Recording ─────────────────────────────────────────────────────────
+  function mime() {
+    // avc3, not avc1: the picture may change size mid-walk (presentation view,
+    // a resized window), which avc1 in Chrome refuses.
+    var list = ['video/mp4;codecs=avc3.640028,mp4a.40.2', 'video/mp4;codecs=avc3,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4',
+                'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
+    for (var i = 0; i < list.length; i++) if (MediaRecorder.isTypeSupported(list[i])) return list[i];
+    return '';
+  }
+  function go() {
+    drop('rcn-rec-wait'); drop('rcn-rec-toast');
+    var type = mime(), rec;
+    try { rec = new MediaRecorder(cur.stream, { mimeType: type, videoBitsPerSecond: 2500000, audioBitsPerSecond: 128000 }); }
+    catch (e) { rec = new MediaRecorder(cur.stream); }
+    cur.rec = rec; cur.state = 'rec'; cur.t0 = Date.now();
+    var c = cur;
+    rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) c.chunks.push(ev.data); };
+    rec.onerror = function (ev) { console.warn('rcn-record: recorder', ev.error || ev); if (cur === c) stop(false); };
+    rec.start(1000);
+    document.body.classList.add('rcn-recording');
+  }
+  function stop(discard) {
+    if (!cur) return;
+    var c = cur; cur = null;
+    clearTimeout(c.tail); drop('rcn-rec-wait');
+    document.body.classList.remove('rcn-recording');
+    var release = function () {
+      c.ds.getTracks().forEach(function (t) { t.stop(); });
+      if (c.mic) c.mic.getTracks().forEach(function (t) { t.stop(); });
+      if (c.ctx) try { c.ctx.close(); } catch (e) {}
+    };
+    if (!c.rec || c.state !== 'rec' || discard) { if (c.rec && c.rec.state !== 'inactive') c.rec.stop(); release(); return; }
+    c.rec.onstop = function () { release(); save(c); };
+    c.rec.stop();
+  }
+  function save(c) {
+    var type = (c.rec.mimeType || 'video/webm').split(';')[0];
+    var blob = new Blob(c.chunks, { type: type });
+    var d = new Date(), day = d.getFullYear() + '-' + ('0' + (d.getMonth() + 1)).slice(-2) + '-' + ('0' + d.getDate()).slice(-2);
+    var file = ((c.name || 'Walk') + ' — ' + day).replace(/[\\/:*?"<>|]+/g, '-') + (type === 'video/mp4' ? '.mp4' : '.webm');
+    var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
+    var secs = Math.round((Date.now() - c.t0) / 1000), mb = (blob.size / 1048576).toFixed(1);
+    toast('Saved “' + file + '” to Downloads — ' + Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2) + ', ' + mb + ' MB' +
+          (c.noTabSound ? '. No tab sound: “Also share tab audio” was not ticked.' : ''), 9000);
+  }
+
+  // ── Hearing the walk ──────────────────────────────────────────────────
+  var seen = {};
+  function hear(m) {
+    if (!cur || !m || (m.type !== 'rcn-walk' && m.type !== 'rcn-walk-done')) return;
+    if (m.k) { if (seen[m.k]) return; seen[m.k] = 1; }
+    var other = cur.lead && m.lead && m.lead !== cur.lead;   // a message about some other walk
+    if (m.type === 'rcn-walk-done') {          // the last step has been read
+      if (cur.state === 'rec' && !other) { clearTimeout(cur.tail); cur.tail = setTimeout(function () { stop(false); }, TAIL); }
+      return;
+    }
+    if (m.end) { if (cur.state === 'rec' && !other) stop(false); return; }   // the walk was closed
+    cur.lead = m.lead || cur.lead;             // the walk leading now is the one being recorded
+    if (!cur.name && m.label) cur.name = String(m.label).split(' — step ')[0];
+    if (cur.state === 'armed') go();
+    else if (cur.tail) { clearTimeout(cur.tail); cur.tail = null; }  // went back a step after the end: keep going
+  }
+  window.addEventListener('rcn-walk-local', function (ev) { hear(ev.detail); });
+  window.addEventListener('message', function (ev) { if (ev.origin === location.origin || ev.origin === 'null') hear(ev.data); });
+  if ('BroadcastChannel' in window) try { new BroadcastChannel('rcn-follow').addEventListener('message', function (ev) { hear(ev.data); }); } catch (e) {}
+  window.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && cur && cur.state === 'armed') stop(true); });
+  window.addEventListener('pagehide', function () { if (cur) stop(false); });
+})();
+  // END rcn-record
 
   // Farm sites are alice.localhost, scp-experiment.localhost, … so match the suffix,
   // not the bare hostname. Local wikis get the working copy off the sofi-proxy static
@@ -603,6 +842,7 @@
             <div style="display:flex;gap:6px;justify-content:center;align-items:center;flex-wrap:wrap">
               <button class="walk-start" style="${b}font-weight:600">▶ Walk</button>
               ${pick}
+              ${window.RCNRecord && window.RCNRecord.can ? `<button class="walk-video" style="${b}" title="Record this walk as a video file to share">● Video</button>` : ''}
               <button class="walk-prev" style="${b}display:none" title="Back a step (←)">◀</button>
               <button class="walk-play" style="${b}display:none" title="Play or pause (Space)">❚❚</button>
               <button class="walk-next" style="${b}display:none" title="Next step (→)">▶</button>
@@ -908,7 +1148,7 @@
       $bar.find('.walk-prev, .walk-next, .walk-play, .walk-count, .walk-voice, .walk-close').toggle(open)
       $bar.find('.walk-voicepanel').toggle(!!wk.vp)   // before a walk starts too: choose first, then listen
       $bar.find('.walk-voiceset').css('background', wk.vp ? '#eef2ff' : '')
-      $bar.find('.walk-start, .walk-pick').toggle(!open)
+      $bar.find('.walk-start, .walk-pick, .walk-video').toggle(!open)
       $bar.find('.walk-say').toggle(open)
       $bar.find('.walk-play').text(wk.playing ? '❚❚' : '▶')
       $bar.find('.walk-voice').text(walkPrefs().on ? '🔈 Voice on' : '🔇 Voice off')
@@ -936,6 +1176,7 @@
       if (!st) return
       walkSayStep(st, () => tok === wk.token && activeWalk === wk, () => {
         const last = wk.i >= walk.steps.length - 1
+        if (last && RL && RL.done) RL.done(elG, 'sketch')
         if (st.ask || last) { wk.playing = false; walkUI(last && !st.ask ? 'End of the walk. ← to go back, Esc to stop.' : 'Over to you. Press Space or ▶ to go on.'); return }
         setTimeout(() => { if (tok === wk.token && wk.playing) walkShow(wk.i + 1) }, 800)
       })
@@ -1040,6 +1281,14 @@
       $item.find('.walk-bar').trigger('focus')
     })
     $item.on('click.rcnwalk', '.walk-play', () => walkToggle())
+    // ● Video (tools/rcn-record.js): record the chosen walk as a video file. The
+    // picture is this item's page, or the whole lineup when other items follow.
+    $item.on('click.rcnwalk', '.walk-video', e => {
+      e.stopPropagation()
+      const ws = (graphModel(item) ? walkList(graphModel(item)) : []), i = +($item.find('.walk-pick').val() || 0)
+      window.RCNRecord.cropEl = () => (RL && RL.others(elG)) ? document.querySelector('.main') : ($item.closest('.page')[0] || null)
+      window.RCNRecord.open(() => $item.find('.walk-start').trigger('click'), (ws[i] || {}).name)
+    })
     $item.on('click.rcnwalk', '.walk-prev', () => walkShow(wk.i - 1))
     $item.on('click.rcnwalk', '.walk-next', () => walkShow(wk.i + 1))
     $item.on('click.rcnwalk', '.walk-close', () => walkEnd())
