@@ -324,11 +324,14 @@
  * crops off the header). A pane popped out to its own window is not in the
  * Explorer's video.
  *
- * WHAT IS IN THE SOUND. Whatever this tab plays: people's recorded voices and
- * AI voices (step.voices). NOT the Mac's own computer voice — Chrome hands that
- * to the Mac to speak, outside the tab, and tab sharing can't hear it. The
- * panel's microphone box adds the reader's microphone, to talk over the walk
- * or to let it pick up the computer voice from the speakers.
+ * WHAT IS IN THE SOUND. The computer's own sound when "Record the computer's
+ * sound" is ticked (the default): a second share, of the Entire Screen with
+ * "Also share system audio", whose picture is thrown away. That is the only
+ * way to catch the Mac's own computer voice, which macOS speaks outside the
+ * tab (Marc's first walk video, Nov 18 2026, was silent for that reason).
+ * Skipped, the tab's own sound is used: recorded and AI voices only. The
+ * microphone box mixes in the reader's microphone. A meter on the mix warns,
+ * when the video is saved, if the sound stayed silent.
  *
  * HOW IT KNOWS WHERE THE WALK IS. It listens for the walk messages of
  * tools/rcn-switch.js: { type:'rcn-walk' } for each step and for the end, and
@@ -377,10 +380,12 @@
     var t = document.createElement('div'); t.id = 'rcn-rec-toast'; t.textContent = msg;
     document.body.appendChild(t); setTimeout(function () { if (t.parentNode) t.remove(); }, ms || 6000);
   }
-  function micPref(v) {
-    try { if (v === undefined) return localStorage.getItem('rcnRecordMic') === '1'; localStorage.setItem('rcnRecordMic', v ? '1' : '0'); } catch (e) {}
-    return false;
+  function pref(key, v, dflt) {
+    try { if (v === undefined) { var x = localStorage.getItem(key); return x === null ? dflt : x === '1'; } localStorage.setItem(key, v ? '1' : '0'); } catch (e) {}
+    return dflt;
   }
+  function micPref(v) { return pref('rcnRecordMic', v, false); }
+  function sysPref(v) { return pref('rcnRecordSystem', v, true); }
 
   // ── The panel ─────────────────────────────────────────────────────────
   function open(startFn, name) {
@@ -390,26 +395,36 @@
     var p = document.createElement('div'); p.id = 'rcn-rec-panel';
     p.innerHTML =
       '<h3>● Record ' + (name ? '“' + esc(name) + '”' : 'a walk') + ' as a video</h3>' +
-      '<p>Chrome will ask to share this tab. Tick <b>Also share tab audio</b> so recorded voices are in the video.</p>' +
+      '<p>Chrome will ask to share this tab: that is the picture.</p>' +
       (startFn ? '<p>The walk then starts by itself. ' : '<p>Then click ▶ on a walk in any pane; recording starts with its first step. ') +
       'Recording stops at the end of the walk, or when you close it or press Esc. The video goes to your Downloads folder.</p>' +
+      '<label><input type="checkbox" id="rcn-rec-sys"' + (sysPref() ? ' checked' : '') + '> <span>Record the computer’s sound' +
+      '<br><span class="small">Needed for the computer voice. Chrome asks a second time: choose <b>Entire Screen</b> and turn on <b>Also share system audio</b>. Only the sound is kept; the picture still comes from this tab.</span></span></label>' +
       '<label><input type="checkbox" id="rcn-rec-mic"' + (micPref() ? ' checked' : '') + '> <span>Also record my microphone' +
-      '<br><span class="small">To talk over the walk. The Mac’s own computer voice can’t be recorded from the tab; recorded and AI voices can. For the computer voice, tick this and let the microphone hear your speakers.</span></span></label>' +
+      '<br><span class="small">To talk over the walk.</span></span></label>' +
       '<div class="row"><button data-x>Cancel</button><button class="go" data-go>● Start recording</button></div>';
     document.body.appendChild(p);
     p.querySelector('[data-go]').focus();
     p.addEventListener('click', function (ev) {
       if (ev.target.closest('[data-x]')) { p.remove(); return; }
       if (!ev.target.closest('[data-go]')) return;
-      var mic = el('rcn-rec-mic').checked; micPref(mic); p.remove();
-      arm(startFn, name, mic);
+      var mic = el('rcn-rec-mic').checked, sys = el('rcn-rec-sys').checked; micPref(mic); sysPref(sys); p.remove();
+      arm(startFn, name, mic, sys);
     });
     p.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); p.remove(); } });
   }
 
   // ── Share the tab, then wait for the first step ───────────────────────
-  function arm(startFn, name, mic) {
-    var ds, ms = null;
+  // Sound, in order of preference:
+  //   the computer's sound (system audio, from a second share of the Entire
+  //     Screen: the only way to hear the Mac's own voice, which macOS speaks
+  //     outside the tab; it already holds the tab's sound, so the tab's is
+  //     then left out, or recorded voices would play twice);
+  //   else the tab's sound (recorded and AI voices only);
+  //   plus the microphone when ticked.
+  // Each share needs its own click (Chrome's rule), hence the second button.
+  function arm(startFn, name, mic, sys) {
+    var ds, ss = null, ms = null;
     navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 }, audio: { suppressLocalAudioPlayback: false },
       preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'
@@ -419,31 +434,61 @@
       if (target && window.CropTarget && vt.cropTo)
         return CropTarget.fromElement(target).then(function (ct) { return vt.cropTo(ct); }).catch(function (e) { console.warn('rcn-record: crop', e); });
     }).then(function () {
+      if (sys) return askSystem().then(function (s) { ss = s; });
+    }).then(function () {
       if (mic) return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (m) { ms = m; })
         .catch(function () { toast('The microphone was refused; recording without it.'); });
     }).then(function () {
-      var vt = ds.getVideoTracks()[0], frame = hdFrame(vt), tracks = [frame.track], ctx = null, ins = [];
-      if (ds.getAudioTracks().length) ins.push(new MediaStream(ds.getAudioTracks()));
-      if (ms) ins.push(ms);
-      if (ins.length === 1) tracks.push(ins[0].getAudioTracks()[0]);
-      else if (ins.length > 1) {   // tab sound and microphone, mixed into one track
-        ctx = new AudioContext(); var dest = ctx.createMediaStreamDestination();
-        ins.forEach(function (s) { ctx.createMediaStreamSource(s).connect(dest); });
-        tracks.push(dest.stream.getAudioTracks()[0]);
-      }
-      cur = { state: 'armed', ds: ds, mic: ms, ctx: ctx, frame: frame, stream: new MediaStream(tracks), name: name || null, chunks: [], tail: null,
-              noTabSound: !ds.getAudioTracks().length };
+      var vt = ds.getVideoTracks()[0], frame = hdFrame(vt), tracks = [frame.track], ins = [], from = [];
+      if (ss && ss.getAudioTracks().length) { ins.push(new MediaStream(ss.getAudioTracks())); from.push('computer'); }
+      else if (ds.getAudioTracks().length) { ins.push(new MediaStream(ds.getAudioTracks())); from.push('tab'); }
+      if (ms) { ins.push(ms); from.push('microphone'); }
+      // Every source goes through one mixer, with a meter, so a silent video can be told apart.
+      var ctx = new AudioContext(), dest = ctx.createMediaStreamDestination(), meter = ctx.createAnalyser();
+      meter.fftSize = 2048; meter.connect(dest);
+      ins.forEach(function (st) { ctx.createMediaStreamSource(st).connect(meter); });
+      if (ins.length) tracks.push(dest.stream.getAudioTracks()[0]);
+      cur = { state: 'armed', ds: ds, ss: ss, mic: ms, ctx: ctx, meter: meter, peak: 0, frame: frame, stream: new MediaStream(tracks),
+              name: name || null, chunks: [], tail: null, from: from };
+      if (sys && !(ss && ss.getAudioTracks().length))
+        toast(ss ? 'No computer sound: “Also share system audio” was off. Recording ' + (from.length ? 'the ' + from.join(' and ') : 'no sound') + '.'
+                 : 'Recording without the computer’s sound' + (from.length ? ' — the ' + from.join(' and ') + ' only.' : '.'), 9000);
       vt.addEventListener('ended', function () { stop(false); });   // Chrome's "Stop sharing"
       if (startFn) setTimeout(function () { try { startFn(); } catch (e) { console.warn(e); } }, 150);
       else waiting();
       // A walk that never comes: give the tab back after two minutes.
       setTimeout(function () { if (cur && cur.state === 'armed') { stop(true); toast('No walk started, so nothing was recorded.'); } }, 120000);
     }).catch(function (e) {
-      if (ds) ds.getTracks().forEach(function (t) { t.stop(); });
-      if (ms) ms.getTracks().forEach(function (t) { t.stop(); });
-      cur = null;
+      [ds, ss, ms].forEach(function (st) { if (st) st.getTracks().forEach(function (t) { t.stop(); }); });
+      drop('rcn-rec-panel'); cur = null;
       if (e && e.name === 'NotAllowedError') toast('Not recorded: sharing this tab was cancelled.');
       else { console.warn('rcn-record', e); toast('Could not start recording: ' + (e && e.message || e)); }
+    });
+  }
+  // The second share, for the computer's sound. Resolves to the stream, or null
+  // (skipped, cancelled, or this Chrome can't share system audio).
+  function askSystem() {
+    return new Promise(function (done) {
+      css(); drop('rcn-rec-panel');
+      var p = document.createElement('div'); p.id = 'rcn-rec-panel';
+      p.innerHTML = '<h3>🔊 Now the computer’s sound</h3>' +
+        '<p>In Chrome’s box, choose <b>Entire Screen</b> and turn on <b>Also share system audio</b>. Only the sound is used.</p>' +
+        '<p class="small">The first time, macOS may ask to let Chrome record the screen and system audio (System Settings › Privacy &amp; Security). After allowing it, quit and reopen Chrome.</p>' +
+        '<div class="row"><button data-x>Skip</button><button class="go" data-go>🔊 Share the computer’s sound</button></div>';
+      document.body.appendChild(p);
+      p.querySelector('[data-go]').focus();
+      p.addEventListener('click', function (ev) {
+        if (ev.target.closest('[data-x]')) { p.remove(); done(null); return; }
+        if (!ev.target.closest('[data-go]')) return;
+        p.remove();
+        navigator.mediaDevices.getDisplayMedia({
+          video: true, audio: { suppressLocalAudioPlayback: false, echoCancellation: false, noiseSuppression: false, autoGainControl: false },
+          systemAudio: 'include', selfBrowserSurface: 'exclude', monitorTypeSurfaces: 'include', surfaceSwitching: 'exclude'
+        }).then(function (s) {
+          s.getVideoTracks().forEach(function (t) { t.enabled = false; });   // the picture is the tab's; this share is for its sound
+          done(s);
+        }, function (e) { console.warn('rcn-record: system audio', e); done(null); });
+      });
     });
   }
   function waiting() {
@@ -503,6 +548,11 @@
     rec.ondataavailable = function (ev) { if (ev.data && ev.data.size) c.chunks.push(ev.data); };
     rec.onerror = function (ev) { console.warn('rcn-record: recorder', ev.error || ev); if (cur === c) stop(false); };
     rec.start(1000);
+    c.meterTimer = setInterval(function () {   // loudest moment so far, to warn about a silent video
+      if (!c.meter) return;
+      var a = new Float32Array(c.meter.fftSize); c.meter.getFloatTimeDomainData(a);
+      for (var i = 0; i < a.length; i++) { var v = Math.abs(a[i]); if (v > c.peak) c.peak = v; }
+    }, 250);
     document.body.classList.add('rcn-recording');
   }
   function stop(discard) {
@@ -513,7 +563,9 @@
     var release = function () {
       if (c.frame) c.frame.stop();
       c.stream.getTracks().forEach(function (t) { t.stop(); });
+      clearInterval(c.meterTimer);
       c.ds.getTracks().forEach(function (t) { t.stop(); });
+      if (c.ss) c.ss.getTracks().forEach(function (t) { t.stop(); });
       if (c.mic) c.mic.getTracks().forEach(function (t) { t.stop(); });
       if (c.ctx) try { c.ctx.close(); } catch (e) {}
     };
@@ -531,7 +583,9 @@
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
     var secs = Math.round((Date.now() - c.t0) / 1000), mb = (blob.size / 1048576).toFixed(1);
     toast('Saved “' + file + '” to Downloads — ' + Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2) + ', ' + mb + ' MB' +
-          (c.noTabSound ? '. No tab sound: “Also share tab audio” was not ticked.' : ''), 9000);
+          (!c.from.length ? '. No sound was shared, so the video is silent.'
+            : c.peak < 0.003 ? '. ⚠ The sound was silent the whole time (from the ' + c.from.join(' and ') + ').'
+            + (c.from[0] === 'tab' ? ' The computer voice is only heard with “Record the computer’s sound”.' : '') : ''), 12000);
   }
 
   // ── Hearing the walk ──────────────────────────────────────────────────
