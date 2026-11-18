@@ -319,7 +319,8 @@
  *   <walk name> — <date>.mp4      (.webm where Chrome can't write .mp4)
  *
  * WHAT IS IN THE PICTURE. The whole tab, minus the ⇄ bar and this file's own
- * panels. In the Explorer, only the three panes (Chrome's Region Capture
+ * panels, fitted onto a 1920 × 1080 frame (see hdFrame: one fixed size is
+ * what lets Chrome write an MP4 that QuickTime opens). In the Explorer, only the three panes (Chrome's Region Capture
  * crops off the header). A pane popped out to its own window is not in the
  * Explorer's video.
  *
@@ -421,7 +422,7 @@
       if (mic) return navigator.mediaDevices.getUserMedia({ audio: true }).then(function (m) { ms = m; })
         .catch(function () { toast('The microphone was refused; recording without it.'); });
     }).then(function () {
-      var vt = ds.getVideoTracks()[0], tracks = [vt], ctx = null, ins = [];
+      var vt = ds.getVideoTracks()[0], frame = hdFrame(vt), tracks = [frame.track], ctx = null, ins = [];
       if (ds.getAudioTracks().length) ins.push(new MediaStream(ds.getAudioTracks()));
       if (ms) ins.push(ms);
       if (ins.length === 1) tracks.push(ins[0].getAudioTracks()[0]);
@@ -430,7 +431,7 @@
         ins.forEach(function (s) { ctx.createMediaStreamSource(s).connect(dest); });
         tracks.push(dest.stream.getAudioTracks()[0]);
       }
-      cur = { state: 'armed', ds: ds, mic: ms, ctx: ctx, stream: new MediaStream(tracks), name: name || null, chunks: [], tail: null,
+      cur = { state: 'armed', ds: ds, mic: ms, ctx: ctx, frame: frame, stream: new MediaStream(tracks), name: name || null, chunks: [], tail: null,
               noTabSound: !ds.getAudioTracks().length };
       vt.addEventListener('ended', function () { stop(false); });   // Chrome's "Stop sharing"
       if (startFn) setTimeout(function () { try { startFn(); } catch (e) { console.warn(e); } }, 150);
@@ -453,11 +454,41 @@
     document.body.appendChild(w);
   }
 
+  // ── One fixed picture size ────────────────────────────────────────────
+  // The shared tab changes size during a walk (presentation view, full
+  // screen, a resized window). Chrome's MP4 writer in the form QuickTime plays
+  // (H.264 "avc1") stops when the size changes; the form that copes ("avc3")
+  // QuickTime won't open (found Nov 18 2026 with Marc's first real video). So
+  // the tab is drawn, fitted and centred, onto a 1920 × 1080 canvas, and the
+  // canvas is what gets recorded: always HD, always the same size.
+  var HD_W = 1920, HD_H = 1080;
+  function hdFrame(vt) {
+    var v = document.createElement('video'), cv = document.createElement('canvas'), on = true;
+    v.muted = true; v.playsInline = true; v.srcObject = new MediaStream([vt]);
+    cv.width = HD_W; cv.height = HD_H;
+    var g = cv.getContext('2d', { alpha: false });
+    g.fillStyle = '#fff'; g.fillRect(0, 0, HD_W, HD_H);
+    function draw() {
+      if (!on) return;
+      var w0 = v.videoWidth, h0 = v.videoHeight;
+      if (w0 && h0) {
+        var k = Math.min(HD_W / w0, HD_H / h0), w = Math.round(w0 * k), h = Math.round(h0 * k);
+        g.fillStyle = '#fff'; g.fillRect(0, 0, HD_W, HD_H);
+        g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
+        g.drawImage(v, (HD_W - w) >> 1, (HD_H - h) >> 1, w, h);
+      }
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(draw); else requestAnimationFrame(draw);
+    }
+    v.play().then(draw, draw);
+    return { track: cv.captureStream(30).getVideoTracks()[0],
+             stop: function () { on = false; try { v.pause(); } catch (e) {} v.srcObject = null; } };
+  }
+
   // ── Recording ─────────────────────────────────────────────────────────
   function mime() {
-    // avc3, not avc1: the picture may change size mid-walk (presentation view,
-    // a resized window), which avc1 in Chrome refuses.
-    var list = ['video/mp4;codecs=avc3.640028,mp4a.40.2', 'video/mp4;codecs=avc3,mp4a.40.2', 'video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4',
+    // avc1 first: QuickTime, Keynote, phones and YouTube all take it.
+    var list = ['video/mp4;codecs=avc1.640028,mp4a.40.2', 'video/mp4;codecs=avc1.4d0028,mp4a.40.2', 'video/mp4;codecs=avc1,mp4a.40.2',
+                'video/mp4;codecs=avc3.640028,mp4a.40.2', 'video/mp4',
                 'video/webm;codecs=vp9,opus', 'video/webm;codecs=vp8,opus', 'video/webm'];
     for (var i = 0; i < list.length; i++) if (MediaRecorder.isTypeSupported(list[i])) return list[i];
     return '';
@@ -465,7 +496,7 @@
   function go() {
     drop('rcn-rec-wait'); drop('rcn-rec-toast');
     var type = mime(), rec;
-    try { rec = new MediaRecorder(cur.stream, { mimeType: type, videoBitsPerSecond: 2500000, audioBitsPerSecond: 128000 }); }
+    try { rec = new MediaRecorder(cur.stream, { mimeType: type, videoBitsPerSecond: 4000000, audioBitsPerSecond: 128000 }); }
     catch (e) { rec = new MediaRecorder(cur.stream); }
     cur.rec = rec; cur.state = 'rec'; cur.t0 = Date.now();
     var c = cur;
@@ -480,6 +511,8 @@
     clearTimeout(c.tail); drop('rcn-rec-wait');
     document.body.classList.remove('rcn-recording');
     var release = function () {
+      if (c.frame) c.frame.stop();
+      c.stream.getTracks().forEach(function (t) { t.stop(); });
       c.ds.getTracks().forEach(function (t) { t.stop(); });
       if (c.mic) c.mic.getTracks().forEach(function (t) { t.stop(); });
       if (c.ctx) try { c.ctx.close(); } catch (e) {}
