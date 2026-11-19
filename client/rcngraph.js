@@ -296,33 +296,57 @@
   // END rcn-lineup-follow
 
   // BEGIN rcn-record — pasted from tools/rcn-record.js by tools/paste-lineup-follow.js. Edit that file, never this block.
-/* rcn-record.js — record a walk as a video file to share.
+/* rcn-record.js — record walks as a video file to share.
  *
  * ONE SOURCE. tools/paste-switch.js pastes this file into the Graph Tool, the
  * Map, the Timeline and the Time Place Causality Explorer (rcn-together.html),
- * between BEGIN/END marker lines. Edit this file, then run
- *   node tools/paste-switch.js
+ * between BEGIN/END marker lines, and tools/paste-lineup-follow.js pastes it
+ * into the three wiki plugins. Edit this file, then run both:
+ *   node tools/paste-switch.js && node tools/paste-lineup-follow.js
  *
  * WHAT THE READER DOES. In a tool's list of walks, each walk has a "● Video"
- * button. In the Explorer, the header has "● Record video". A small panel
- * explains what will happen; Start asks Chrome to share this tab (Chrome
- * shows its own "share this tab?" box — tick "Also share tab audio" so
- * recorded voices are in the video). Then:
+ * button. In the Explorer, the header has "● Record video". The panel then:
  *
- *   - in a tool, the walk starts by itself;
- *   - in the Explorer, the reader clicks ▶ on a walk in any pane.
+ *   1. lists every walk there is to record (in the Explorer, the walks of all
+ *      three panes; on a wiki page, the walks of every item in the lineup).
+ *      Tick the ones to record and put them in order with ↑ ↓;
+ *   2. asks Chrome to share this tab (the picture), and the computer's sound
+ *      and the microphone when ticked;
+ *   3. says "Ready". ▶ Begin starts the first walk, and recording begins with
+ *      its first step. Each walk follows the last by itself.
  *
- * Recording begins with the walk's first step, so the video opens on the walk,
- * not on the reader finding the button. It ends by itself a moment after the
- * last step has been read, or when the walk is closed (✕ or Esc), or when the
- * reader clicks Chrome's "Stop sharing". The video downloads as
- *   <walk name> — <date>.mp4      (.webm where Chrome can't write .mp4)
+ * KNOWING IT IS RECORDING. While recording, a small window stays on top of
+ * everything (Chrome's Document Picture-in-Picture). It is not in the video.
+ * It shows a red ● REC with the time, which walk and step is playing, and:
+ *   ❚❚ Pause   — stops the walk, not the recording: people talk, and with the
+ *                microphone ticked their voices are in the video. ▶ Go on
+ *                carries on: the step again if it was cut off, else the next.
+ *   ▶| Next walk, ■ Stop (and save).
+ * Space in that window pauses and goes on. The tab's title starts with
+ * "● REC" too. Where Chrome can't open the small window, the same controls
+ * sit in the corner of the page, and are then in the video.
+ *
+ * It stops by itself a moment after the last walk's last step has been read
+ * (unless paused: then it waits for ▶ Go on or ■ Stop), when a walk is closed
+ * (✕ or Esc), or when Chrome's "Stop sharing" is clicked. The video downloads
+ * as  <walk name> — <date>.mp4      (.webm where Chrome can't write .mp4)
+ *
+ * WHAT A TOOL PROVIDES. Its walks, as RCNRecord.walks (a wiki plugin puts the
+ * same on its item element as el.rcnWalks):
+ *   { label: 'Timeline',
+ *     list()        → the walks' names, in the tool's order
+ *     start(i)      → play walk i from its first step
+ *     pause()       → stop the walk where it is
+ *     resume(again) → play on; again = it was cut off mid-step, so say that step again
+ *     playing()     → true while the walk is moving by itself }
+ * The Explorer sets RCNRecord.sources to a function giving [{label, walks}]
+ * for its panes.
  *
  * WHAT IS IN THE PICTURE. The whole tab, minus the ⇄ bar and this file's own
  * panels, fitted onto a 1920 × 1080 frame (see hdFrame: one fixed size is
- * what lets Chrome write an MP4 that QuickTime opens). In the Explorer, only the three panes (Chrome's Region Capture
- * crops off the header). A pane popped out to its own window is not in the
- * Explorer's video.
+ * what lets Chrome write an MP4 that QuickTime opens). In the Explorer, only
+ * the three panes (Chrome's Region Capture crops off the header). A pane
+ * popped out to its own window is not in the Explorer's video.
  *
  * WHAT IS IN THE SOUND. The computer's own sound when "Record the computer's
  * sound" is ticked (the default): a second share, of the Entire Screen with
@@ -330,8 +354,8 @@
  * way to catch the Mac's own computer voice, which macOS speaks outside the
  * tab (Marc's first walk video, Nov 18 2026, was silent for that reason).
  * Skipped, the tab's own sound is used: recorded and AI voices only. The
- * microphone box mixes in the reader's microphone. A meter on the mix warns,
- * when the video is saved, if the sound stayed silent.
+ * microphone box mixes in the room. A meter on the mix warns, when the video
+ * is saved, if the sound stayed silent.
  *
  * HOW IT KNOWS WHERE THE WALK IS. It listens for the walk messages of
  * tools/rcn-switch.js: { type:'rcn-walk' } for each step and for the end, and
@@ -349,28 +373,55 @@
   var R = window.RCNRecord = {
     can: !!(navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia && window.MediaRecorder) && window.top === window,
     cropEl: null,      // function returning the element to crop the video to (the Explorer's panes), or null for the whole tab
-    open: open,        // open(startFn, name): the panel; Start shares the tab, then calls startFn() (null = wait for a walk)
+    walks: null,       // this tool's walks (see WHAT A TOOL PROVIDES)
+    sources: null,     // function → [{label, walks}]: a page holding several tools (the Explorer)
+    choose: choose,    // choose({walks, walk, crop}): the panel, with that walk ticked first
+    open: open,        // older plugin copies: open(startFn, name) records the one walk startFn starts
     stop: function () { stop(false); }
   };
-  var cur = null;      // { state:'armed'|'rec', ds, mic, ctx, stream, rec, chunks, name, t0, tail }
-  var TAIL = 2500;     // ms of picture kept after the last step has been read
+  var cur = null;      // { state:'armed'|'rec', q, k, paused, after, ... }
+  var TAIL = 2500;     // ms of picture kept after the last step of the last walk has been read
+  var GAP = 2000;      // ms between one walk's last step and the next walk's first
 
-  function css() {
-    if (document.getElementById('rcn-rec-css')) return;
-    var s = document.createElement('style'); s.id = 'rcn-rec-css';
+  function css(doc) {
+    doc = doc || document;
+    if (doc.getElementById('rcn-rec-css')) return;
+    var s = doc.createElement('style'); s.id = 'rcn-rec-css';
     s.textContent =
-      '#rcn-rec-panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100001;width:min(440px,calc(100vw - 32px));' +
+      '#rcn-rec-panel{position:fixed;left:50%;top:50%;transform:translate(-50%,-50%);z-index:100001;width:min(480px,calc(100vw - 32px));max-height:calc(100vh - 32px);overflow:auto;box-sizing:border-box;' +
       'background:#fff;color:#1e293b;border-radius:12px;box-shadow:0 8px 40px rgba(0,0,0,.35);padding:18px 20px;font:14px/1.45 system-ui,sans-serif}' +
       '#rcn-rec-panel h3{margin:0 0 8px;font-size:16px}#rcn-rec-panel p{margin:0 0 10px}#rcn-rec-panel .small{font-size:12.5px;color:#475569}' +
-      '#rcn-rec-panel label{display:flex;gap:8px;align-items:flex-start;margin:4px 0 12px;cursor:pointer}' +
+      '#rcn-rec-panel label.opt{display:flex;gap:8px;align-items:flex-start;margin:4px 0 12px;cursor:pointer}' +
       '#rcn-rec-panel .row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}' +
-      '#rcn-rec-panel button,#rcn-rec-wait button{font:inherit;border:1px solid #cbd5e1;background:#fff;border-radius:8px;padding:6px 14px;cursor:pointer}' +
-      '#rcn-rec-panel button.go{background:#b91c1c;border-color:#b91c1c;color:#fff;font-weight:600}' +
+      '#rcn-rec-panel button,#rcn-rec-wait button{font:inherit;border:1px solid #cbd5e1;background:#fff;color:#1e293b;border-radius:8px;padding:6px 14px;cursor:pointer}' +
+      '#rcn-rec-panel button.go{background:#b91c1c;border-color:#b91c1c;color:#fff;font-weight:600}#rcn-rec-panel button:disabled{opacity:.4;cursor:default}' +
+      '#rcn-rec-panel .walks{border:1px solid #e2e8f0;border-radius:8px;margin:0 0 12px;max-height:240px;overflow:auto}' +
+      '#rcn-rec-panel .wr{display:flex;align-items:center;gap:6px;padding:4px 8px;border-top:1px solid #f1f5f9}#rcn-rec-panel .wr:first-child{border-top:0}' +
+      '#rcn-rec-panel .wr.on{background:#fef2f2}#rcn-rec-panel .wr label{flex:1;display:flex;gap:8px;align-items:center;cursor:pointer;min-width:0}' +
+      '#rcn-rec-panel .wr .num{display:inline-block;min-width:1.4em;text-align:center;font-weight:700;color:#b91c1c}' +
+      '#rcn-rec-panel .wr .src{color:#64748b;font-size:12px}#rcn-rec-panel .wr button{padding:1px 8px;font-size:13px}' +
       '#rcn-rec-wait,#rcn-rec-toast{position:fixed;left:50%;top:12px;transform:translateX(-50%);z-index:100001;background:#fff;color:#1e293b;' +
       'border-radius:10px;box-shadow:0 2px 14px rgba(0,0,0,.3);padding:8px 14px;font:13px system-ui,sans-serif;display:flex;gap:10px;align-items:center}' +
       '#rcn-rec-wait b{color:#b91c1c}' +
+      // The controls: in the small on-top window, or in the page's corner where that can't open.
+      '.rcn-ctl{font:14px/1.35 system-ui,sans-serif;color:#1e293b;background:#fff;padding:10px 12px;box-sizing:border-box}' +
+      '#rcn-rec-ctl{position:fixed;right:12px;bottom:12px;z-index:100002;width:340px;border-radius:12px;box-shadow:0 4px 24px rgba(0,0,0,.35)}' +
+      '.rcn-ctl .top{display:flex;align-items:center;gap:8px;font-weight:700}' +
+      '.rcn-ctl .dot{width:14px;height:14px;border-radius:50%;background:#dc2626;flex:none}' +
+      '.rcn-ctl.live .dot{animation:rcnblink 1.2s step-start infinite}.rcn-ctl.held .dot{background:#f59e0b}.rcn-ctl.ready .dot{background:#94a3b8}' +
+      '@keyframes rcnblink{50%{opacity:.25}}' +
+      '.rcn-ctl .rec{color:#b91c1c;letter-spacing:.04em}.rcn-ctl.held .rec{color:#b45309}.rcn-ctl.ready .rec{color:#475569}' +
+      '.rcn-ctl .time{font-variant-numeric:tabular-nums;margin-left:auto;font-weight:600}' +
+      '.rcn-ctl .what{margin:6px 0 2px;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}' +
+      '.rcn-ctl .note{font-size:12.5px;color:#475569;min-height:2.6em}.rcn-ctl.held .note{color:#92400e}' +
+      '.rcn-ctl .btns{display:flex;gap:6px;margin-top:8px}' +
+      '.rcn-ctl button{font:inherit;font-size:13px;border:1px solid #cbd5e1;background:#fff;color:#1e293b;border-radius:8px;padding:6px 10px;cursor:pointer}' +
+      '.rcn-ctl button.main{flex:1;font-weight:700;background:#1e293b;border-color:#1e293b;color:#fff}' +
+      '.rcn-ctl button.main.go{background:#15803d;border-color:#15803d}' +
+      '.rcn-ctl button.stop{color:#b91c1c;border-color:#fca5a5}' +
+      '.rcn-ctl .inv{font-size:11px;color:#94a3b8;margin-top:6px}' +
       'body.rcn-recording #rcn-switch,body.rcn-recording #rcn-rec-toast{display:none!important}';
-    document.head.appendChild(s);
+    doc.head.appendChild(s);
   }
   function el(id) { return document.getElementById(id); }
   function drop(id) { var e = el(id); if (e) e.remove(); }
@@ -386,35 +437,101 @@
   }
   function micPref(v) { return pref('rcnRecordMic', v, false); }
   function sysPref(v) { return pref('rcnRecordSystem', v, true); }
+  function clock(ms) { var s = Math.max(0, Math.round(ms / 1000)); return Math.floor(s / 60) + ':' + ('0' + s % 60).slice(-2); }
 
-  // ── The panel ─────────────────────────────────────────────────────────
-  function open(startFn, name) {
+  // ── Which walks there are ─────────────────────────────────────────────
+  // [{label, walks, page}] — the Explorer's panes, a wiki lineup's items, or this tool.
+  function sources() {
+    var out = [];
+    try { if (R.sources) out = R.sources() || []; } catch (e) { console.warn('rcn-record: sources', e); }
+    if (!out.length) {
+      var items = document.querySelectorAll('.item'), pages = [];
+      for (var j = 0; j < items.length; j++) if (items[j].rcnWalks) {
+        var pg = items[j].closest('.page'), h = pg && pg.querySelector('h1');
+        out.push({ label: items[j].rcnWalks.label || 'Walks', walks: items[j].rcnWalks, page: pg, title: h ? h.textContent.trim() : '' });
+        if (pg && pages.indexOf(pg) < 0) pages.push(pg);
+      }
+      if (pages.length > 1) out.forEach(function (s) { if (s.title) s.label += ' · ' + s.title; });
+    }
+    if (!out.length && R.walks) out.push({ label: R.walks.label || '', walks: R.walks });
+    return out.filter(function (s) { try { return s.walks && s.walks.list().length; } catch (e) { return false; } });
+  }
+
+  // ── The panel: which walks, in which order, and what sound ────────────
+  function choose(o) {
+    o = o || {};
     if (!R.can) { toast('Recording a video needs Chrome or Edge, with the tool open in its own tab.'); return; }
-    if (cur) { toast('Already recording — press Esc or close the walk to finish.'); return; }
+    if (cur) { toast('Already recording — use the small ● REC window to stop.'); return; }
+    var rows = [], first = null, srcs = sources(), many = srcs.length > 1;
+    srcs.forEach(function (s) {
+      s.walks.list().forEach(function (name, i) {
+        var r = { walks: s.walks, i: i, name: name || 'Walk ' + (i + 1), label: many ? s.label : '', page: s.page || null, on: false };
+        if (!first && o.walk != null && i === +o.walk && (!o.walks || o.walks === s.walks)) { r.on = true; first = r; } else rows.push(r);
+      });
+    });
+    if (first) rows.unshift(first);
+    if (!rows.length) { toast('There are no walks here to record yet.'); return; }
+    if (rows.length === 1) rows[0].on = true;
+    panel(rows, o.crop || R.cropEl);
+  }
+  function open(startFn, name) {   // one walk, started by startFn (the older plugins' call)
+    if (!R.can) { toast('Recording a video needs Chrome or Edge, with the tool open in its own tab.'); return; }
+    if (cur) { toast('Already recording — use the small ● REC window to stop.'); return; }
+    panel([{ walks: startFn ? { start: startFn } : null, i: 0, name: name || '', label: '', on: true, fixed: true }], R.cropEl);
+  }
+  function panel(rows, crop) {
     css(); drop('rcn-rec-panel');
     var p = document.createElement('div'); p.id = 'rcn-rec-panel';
-    p.innerHTML =
-      '<h3>● Record ' + (name ? '“' + esc(name) + '”' : 'a walk') + ' as a video</h3>' +
-      '<p>Chrome will ask to share this tab: that is the picture.</p>' +
-      (startFn ? '<p>The walk then starts by itself. ' : '<p>Then click ▶ on a walk in any pane; recording starts with its first step. ') +
-      'Recording stops at the end of the walk, or when you close it or press Esc. The video goes to your Downloads folder.</p>' +
-      '<label><input type="checkbox" id="rcn-rec-sys"' + (sysPref() ? ' checked' : '') + '> <span>Record the computer’s sound' +
-      '<br><span class="small">Needed for the computer voice. Chrome asks a second time: choose <b>Entire Screen</b> and turn on <b>Also share system audio</b>. Only the sound is kept; the picture still comes from this tab.</span></span></label>' +
-      '<label><input type="checkbox" id="rcn-rec-mic"' + (micPref() ? ' checked' : '') + '> <span>Also record my microphone' +
-      '<br><span class="small">To talk over the walk.</span></span></label>' +
-      '<div class="row"><button data-x>Cancel</button><button class="go" data-go>● Start recording</button></div>';
-    document.body.appendChild(p);
-    p.querySelector('[data-go]').focus();
+    var fixed = rows.length === 1 && rows[0].fixed;
+    function list() {
+      var n = 0;
+      return '<div class="walks">' + rows.map(function (r, k) {
+        return '<div class="wr' + (r.on ? ' on' : '') + '"><label><input type="checkbox" data-k="' + k + '"' + (r.on ? ' checked' : '') + '>' +
+          '<span class="num">' + (r.on ? ++n : '') + '</span><span>' + (r.label ? '<span class="src">' + esc(r.label) + ' — </span>' : '') + esc(r.name) + '</span></label>' +
+          '<button data-up="' + k + '" title="Earlier"' + (k ? '' : ' disabled') + '>↑</button><button data-dn="' + k + '" title="Later"' + (k < rows.length - 1 ? '' : ' disabled') + '>↓</button></div>';
+      }).join('') + '</div>';
+    }
+    function draw(focusSel) {
+      var on = rows.filter(function (r) { return r.on; }).length;
+      var s0 = el('rcn-rec-sys'), m0 = el('rcn-rec-mic'), sys = s0 ? s0.checked : sysPref(), mic = m0 ? m0.checked : micPref();
+      p.innerHTML =
+        '<h3>● Record ' + (fixed ? (rows[0].name ? '“' + esc(rows[0].name) + '”' : 'a walk') : 'walks') + ' as a video</h3>' +
+        (fixed ? '' : '<p>Tick the walks to record. They play in this order, one after another; ↑ ↓ change the order.</p>' + list()) +
+        '<label class="opt"><input type="checkbox" id="rcn-rec-sys"' + (sys ? ' checked' : '') + '> <span>Record the computer’s sound' +
+        '<br><span class="small">Needed for the computer voice. Chrome asks a second time: choose <b>Entire Screen</b> and turn on <b>Also share system audio</b>. Only the sound is kept; the picture comes from this tab.</span></span></label>' +
+        '<label class="opt"><input type="checkbox" id="rcn-rec-mic"' + (mic ? ' checked' : '') + '> <span>Record the room (microphone)' +
+        '<br><span class="small">So people’s voices are in the video — talking over the walk, or while it is paused.</span></span></label>' +
+        '<p class="small">While recording, a small ● REC window stays on top, with ❚❚ Pause' + (fixed ? '' : ', Next walk') + ' and Stop. Pausing stops the walk, not the recording.</p>' +
+        '<div class="row"><button data-x>Cancel</button><button class="go" data-go' + (on ? '' : ' disabled') + '>● Start recording' + (on > 1 ? ' ' + on + ' walks' : '') + '</button></div>';
+      var f = p.querySelector(focusSel || '[data-go]'); if (f && !f.disabled) f.focus();
+    }
+    document.body.appendChild(p); draw();
+    p.addEventListener('change', function (ev) {
+      var k = ev.target.getAttribute('data-k'); if (k == null) return;
+      rows[+k].on = ev.target.checked; draw('[data-k="' + k + '"]');
+    });
     p.addEventListener('click', function (ev) {
-      if (ev.target.closest('[data-x]')) { p.remove(); return; }
-      if (!ev.target.closest('[data-go]')) return;
+      var b = ev.target.closest('button'); if (!b) return;
+      if (b.hasAttribute('data-x')) { p.remove(); return; }
+      var up = b.getAttribute('data-up'), dn = b.getAttribute('data-dn');
+      if (up != null || dn != null) {
+        var k = +(up != null ? up : dn), j = up != null ? k - 1 : k + 1, t = rows[k];
+        rows[k] = rows[j]; rows[j] = t;
+        draw('[data-' + (up != null ? 'up' : 'dn') + '="' + j + '"]');
+        return;
+      }
+      if (!b.hasAttribute('data-go')) return;
       var mic = el('rcn-rec-mic').checked, sys = el('rcn-rec-sys').checked; micPref(mic); sysPref(sys); p.remove();
-      arm(startFn, name, mic, sys);
+      var q = rows.filter(function (r) { return r.on; });
+      // Walks from items on different wiki pages: the picture is the whole lineup.
+      var pages = q.map(function (r) { return r.page; }).filter(function (x, i, a) { return x && a.indexOf(x) === i; });
+      if (pages.length > 1 && document.querySelector('.main')) crop = function () { return document.querySelector('.main'); };
+      arm(q, mic, sys, crop);
     });
     p.addEventListener('keydown', function (ev) { if (ev.key === 'Escape') { ev.stopPropagation(); p.remove(); } });
   }
 
-  // ── Share the tab, then wait for the first step ───────────────────────
+  // ── Share the tab and the sound ───────────────────────────────────────
   // Sound, in order of preference:
   //   the computer's sound (system audio, from a second share of the Entire
   //     Screen: the only way to hear the Mac's own voice, which macOS speaks
@@ -422,15 +539,16 @@
   //     then left out, or recorded voices would play twice);
   //   else the tab's sound (recorded and AI voices only);
   //   plus the microphone when ticked.
-  // Each share needs its own click (Chrome's rule), hence the second button.
-  function arm(startFn, name, mic, sys) {
+  // Each share needs its own click (Chrome's rule), hence the second button,
+  // and the small on-top window needs one more: ▶ Begin.
+  function arm(q, mic, sys, crop) {
     var ds, ss = null, ms = null;
     navigator.mediaDevices.getDisplayMedia({
       video: { frameRate: 30 }, audio: { suppressLocalAudioPlayback: false },
       preferCurrentTab: true, selfBrowserSurface: 'include', surfaceSwitching: 'exclude', systemAudio: 'exclude'
     }).then(function (s) {
       ds = s;
-      var vt = ds.getVideoTracks()[0], target = R.cropEl && R.cropEl();
+      var vt = ds.getVideoTracks()[0], target = crop && crop();
       if (target && window.CropTarget && vt.cropTo)
         return CropTarget.fromElement(target).then(function (ct) { return vt.cropTo(ct); }).catch(function (e) { console.warn('rcn-record: crop', e); });
     }).then(function () {
@@ -449,13 +567,15 @@
       ins.forEach(function (st) { ctx.createMediaStreamSource(st).connect(meter); });
       if (ins.length) tracks.push(dest.stream.getAudioTracks()[0]);
       cur = { state: 'armed', ds: ds, ss: ss, mic: ms, ctx: ctx, meter: meter, peak: 0, frame: frame, stream: new MediaStream(tracks),
-              name: name || null, chunks: [], tail: null, from: from };
+              q: q, k: -1, paused: false, again: false, after: null, timer: null, hold: 0, step: '',
+              name: q.length > 1 ? q[0].name + ' and ' + (q.length - 1) + ' more' : q[0].name || null,
+              chunks: [], from: from, title: document.title };
+      document.title = '● REC — ' + cur.title;
       if (sys && !(ss && ss.getAudioTracks().length))
         toast(ss ? 'No computer sound came through. Check that “Also share system audio” is on, and that macOS lets Chrome record system audio (System Settings › Privacy & Security › Screen & System Audio Recording; then quit and reopen Chrome). Recording ' + (from.length ? 'the ' + from.join(' and ') : 'no sound') + '.'
                  : 'Recording without the computer’s sound' + (from.length ? ' — the ' + from.join(' and ') + ' only.' : '.'), 9000);
       vt.addEventListener('ended', function () { stop(false); });   // Chrome's "Stop sharing"
-      if (startFn) setTimeout(function () { try { startFn(); } catch (e) { console.warn(e); } }, 150);
-      else waiting();
+      ready();
       // A walk that never comes: give the tab back after two minutes.
       setTimeout(function () { if (cur && cur.state === 'armed') { stop(true); toast('No walk started, so nothing was recorded.'); } }, 120000);
     }).catch(function (e) {
@@ -491,12 +611,137 @@
       });
     });
   }
+  // Everything is shared. ▶ Begin opens the small on-top window (its own
+  // click: Chrome's rule again) and starts the first walk.
+  function ready() {
+    css(); drop('rcn-rec-panel');
+    var c = cur, q = c.q, p = document.createElement('div'); p.id = 'rcn-rec-panel';
+    var noStart = q.length === 1 && !q[0].walks, mic = c.from.indexOf('microphone') >= 0;
+    p.innerHTML = '<h3>● Ready to record</h3>' +
+      '<p>' + (noStart ? 'After ▶ Begin, start the walk; recording begins with its first step.'
+        : q.length > 1 ? 'The ' + q.length + ' walks play one after another. Recording begins with the first step of “' + esc(q[0].name) + '”.'
+        : 'Recording begins with the walk’s first step.') + '</p>' +
+      '<p class="small">A small ● REC window will stay on top of everything, with ❚❚ Pause, ' + (q.length > 1 ? 'Next walk ' : '') + 'and Stop. It is not in the video. ' +
+      (mic ? 'Pause the walk whenever the room wants to talk: the microphone keeps recording.' : 'The microphone is off, so talk while paused is not recorded.') + '</p>' +
+      '<div class="row"><button data-x>Cancel</button><button class="go" data-go>▶ Begin</button></div>';
+    document.body.appendChild(p);
+    p.querySelector('[data-go]').focus();
+    p.addEventListener('click', function (ev) {
+      if (ev.target.closest('[data-x]')) { p.remove(); stop(true); toast('Not recorded.'); return; }
+      if (!ev.target.closest('[data-go]')) return;
+      p.remove();
+      var dp = window.documentPictureInPicture, w = null;
+      try { if (dp) w = dp.requestWindow({ width: 360, height: 196 }); } catch (e) { w = null; }
+      Promise.resolve(w).catch(function (e) { console.warn('rcn-record: on-top window', e); return null; }).then(function (pip) {
+        if (cur !== c) { if (pip) pip.close(); return; }
+        controls(pip);
+        if (noStart) waiting(); else next();
+      });
+    });
+  }
   function waiting() {
     css(); drop('rcn-rec-wait');
     var w = document.createElement('div'); w.id = 'rcn-rec-wait';
     w.innerHTML = '<span><b>●</b> Ready to record — start a walk</span><button>Cancel</button>';
     w.querySelector('button').onclick = function () { stop(true); };
     document.body.appendChild(w);
+  }
+
+  // ── The walks, one after another ──────────────────────────────────────
+  function walk() { return cur && cur.k >= 0 && cur.q[cur.k] ? cur.q[cur.k].walks : null; }
+  function playing() { var w = walk(); try { return !!(w && w.playing && w.playing()); } catch (e) { return false; } }
+  function next() {
+    if (!cur) return;
+    clearTimeout(cur.timer); cur.after = null; cur.paused = false; cur.again = false;
+    if (cur.k + 1 >= cur.q.length) { stop(false); return; }
+    var w0 = walk(); if (w0 && w0.pause) try { w0.pause(); } catch (e) {}
+    cur.k++; cur.step = '';
+    cur.hold = Date.now() + 2500;   // the walk before may close as this one starts: no reason to stop
+    var r = cur.q[cur.k];
+    try { r.walks.start(r.i); } catch (e) { console.warn('rcn-record: start', e); }
+    draw();
+  }
+  // What happens once a walk's last step has been read: the next walk, or the end.
+  function later(what, ms) {
+    cur.after = what; clearTimeout(cur.timer);
+    if (!cur.paused) cur.timer = setTimeout(then, ms);
+    draw();
+  }
+  function then() { if (!cur) return; var a = cur.after; cur.after = null; if (a === 'next') next(); else if (a === 'end') stop(false); }
+  function pause() {
+    if (!cur || cur.paused) return;
+    cur.paused = true; clearTimeout(cur.timer);
+    var w = walk(), pl = playing();
+    cur.again = pl;
+    if (pl && w.pause) try { w.pause(); } catch (e) {}
+    draw();
+  }
+  function goOn() {
+    if (!cur) return;
+    var was = cur.paused; cur.paused = false;
+    if (cur.after) { then(); return; }
+    var w = walk();
+    if (w && w.resume) try { w.resume(was && cur.again); } catch (e) { console.warn(e); }
+    cur.again = false; draw();
+  }
+  // The big button: Pause while the walk moves, Hold while the next walk or the end
+  // is about to come, Go on while held or while the walk waits (an "over to you" step).
+  function toggle() {
+    if (!cur || cur.state !== 'rec') return;
+    if (cur.paused) goOn(); else if (cur.after) pause(); else if (playing()) pause(); else goOn();
+  }
+
+  // ── The controls: ● REC, the time, Pause / Go on, Next walk, Stop ─────
+  function controls(pip) {
+    var c = cur; if (!c) return;
+    var doc = pip ? pip.document : document, host;
+    css(doc);
+    if (pip) { doc.title = '● REC'; doc.body.style.margin = '0'; doc.body.style.background = '#fff'; host = doc.createElement('div'); doc.body.appendChild(host); }
+    else { drop('rcn-rec-ctl'); host = document.createElement('div'); host.id = 'rcn-rec-ctl'; document.body.appendChild(host); }
+    host.className = 'rcn-ctl ready';
+    host.innerHTML = '<div class="top"><span class="dot"></span><span class="rec">READY</span><span class="time">0:00</span></div>' +
+      '<div class="what"></div><div class="note"></div>' +
+      '<div class="btns"><button class="main" data-p>❚❚ Pause</button><button data-n title="Skip to the next walk">▶| Next walk</button><button class="stop" data-s title="Stop recording and save the video">■ Stop</button></div>' +
+      (pip ? '' : '<div class="inv">This box is in the video (Chrome could not open the small on-top window).</div>');
+    host.addEventListener('click', function (ev) {
+      var b = ev.target.closest('button'); if (!b || cur !== c) return;
+      if (b.hasAttribute('data-p')) toggle();
+      else if (b.hasAttribute('data-n')) next();
+      else if (b.hasAttribute('data-s')) { var w = walk(); if (w && w.pause) try { w.pause(); } catch (e) {} stop(false); }   // ■ Stop leaves the walk paused, not playing on
+      b.blur();
+    });
+    // Space in the small window. (In the page, Space already belongs to the walk.)
+    if (pip) doc.addEventListener('keydown', function (ev) {
+      if (cur !== c || ev.key !== ' ') return;
+      ev.preventDefault(); toggle();
+    });
+    c.ctl = { pip: pip, host: host };
+    if (pip) pip.addEventListener('pagehide', function () {   // the small window was closed: keep the controls, in the page
+      if (cur === c && c.ctl && c.ctl.pip === pip) { c.ctl = null; controls(null); }
+    });
+    clearInterval(c.tick); c.tick = setInterval(draw, 250);
+    draw();
+  }
+  function draw() {
+    var c = cur; if (!c || !c.ctl) return;
+    var h = c.ctl.host, q = c.q, r = q[c.k], live = c.state === 'rec', pl = playing(), last = c.k >= q.length - 1, mic = c.from.indexOf('microphone') >= 0;
+    var st = !live ? 'ready' : c.paused || (!pl && !c.after) ? 'held' : 'live';
+    if (h.className !== 'rcn-ctl ' + st) h.className = 'rcn-ctl ' + st;
+    function set(sel, t) { var e = h.querySelector(sel); if (e && e.textContent !== t) e.textContent = t; }
+    set('.rec', !live ? 'READY' : c.paused ? 'REC · PAUSED' : 'REC');
+    set('.time', live ? clock(Date.now() - c.t0) : '0:00');
+    set('.what', r ? (q.length > 1 ? 'Walk ' + (c.k + 1) + ' of ' + q.length + ': ' : '') + (r.label ? r.label + ' — ' : '') + (c.step || r.name) : c.step || 'Start a walk');
+    set('.note', !live ? 'Waiting for the walk’s first step…'
+      : c.paused ? 'The walk is paused; the recording goes on' + (mic ? ' and hears the room. Talk, then ▶ Go on.' : ' (the microphone is off). ▶ Go on carries on.')
+      : c.after === 'next' ? 'The next walk starts in a moment. ❚❚ Hold to talk first.'
+      : c.after === 'end' ? 'Finishing — the video saves in a moment. ❚❚ Hold to keep recording.'
+      : !pl ? 'The walk is waiting for you. ▶ Go on when ready.' : 'Space or ❚❚ pauses the walk so people can talk.');
+    var p = h.querySelector('[data-p]'), w = walk();
+    var label = c.paused ? '▶ Go on' : c.after ? '❚❚ Hold' : pl ? '❚❚ Pause' : '▶ Go on';
+    if (p.textContent !== label) p.textContent = label;
+    p.classList.toggle('go', label === '▶ Go on');
+    p.hidden = !live || !(c.paused || c.after || (w && w.pause));
+    h.querySelector('[data-n]').hidden = last || !live;
   }
 
   // ── One fixed picture size ────────────────────────────────────────────
@@ -513,7 +758,7 @@
     cv.width = HD_W; cv.height = HD_H;
     var g = cv.getContext('2d', { alpha: false });
     g.fillStyle = '#fff'; g.fillRect(0, 0, HD_W, HD_H);
-    function draw() {
+    function paint() {
       if (!on) return;
       var w0 = v.videoWidth, h0 = v.videoHeight;
       if (w0 && h0) {
@@ -522,9 +767,9 @@
         g.imageSmoothingEnabled = true; g.imageSmoothingQuality = 'high';
         g.drawImage(v, (HD_W - w) >> 1, (HD_H - h) >> 1, w, h);
       }
-      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(draw); else requestAnimationFrame(draw);
+      if (v.requestVideoFrameCallback) v.requestVideoFrameCallback(paint); else requestAnimationFrame(paint);
     }
-    v.play().then(draw, draw);
+    v.play().then(paint, paint);
     return { track: cv.captureStream(30).getVideoTracks()[0],
              stop: function () { on = false; try { v.pause(); } catch (e) {} v.srcObject = null; } };
   }
@@ -554,11 +799,14 @@
       for (var i = 0; i < a.length; i++) { var v = Math.abs(a[i]); if (v > c.peak) c.peak = v; }
     }, 250);
     document.body.classList.add('rcn-recording');
+    draw();
   }
   function stop(discard) {
     if (!cur) return;
     var c = cur; cur = null;
-    clearTimeout(c.tail); drop('rcn-rec-wait');
+    clearTimeout(c.timer); clearInterval(c.tick); drop('rcn-rec-wait'); drop('rcn-rec-panel'); drop('rcn-rec-ctl');
+    if (c.ctl && c.ctl.pip) { var pp = c.ctl.pip; c.ctl = null; try { pp.close(); } catch (e) {} }
+    document.title = c.title;
     document.body.classList.remove('rcn-recording');
     var release = function () {
       if (c.frame) c.frame.stop();
@@ -581,8 +829,8 @@
     var a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = file;
     document.body.appendChild(a); a.click(); a.remove();
     setTimeout(function () { URL.revokeObjectURL(a.href); }, 60000);
-    var secs = Math.round((Date.now() - c.t0) / 1000), mb = (blob.size / 1048576).toFixed(1);
-    toast('Saved “' + file + '” to Downloads — ' + Math.floor(secs / 60) + ':' + ('0' + secs % 60).slice(-2) + ', ' + mb + ' MB' +
+    var mb = (blob.size / 1048576).toFixed(1);
+    toast('Saved “' + file + '” to Downloads — ' + clock(Date.now() - c.t0) + ', ' + mb + ' MB' +
           (!c.from.length ? '. No sound was shared, so the video is silent.'
             : c.peak < 0.003 ? '. ⚠ The sound was silent the whole time (from the ' + c.from.join(' and ') + ').'
             + (c.from[0] === 'tab' ? ' The computer voice is only heard with “Record the computer’s sound”.' : '') : ''), 12000);
@@ -595,19 +843,24 @@
     if (m.k) { if (seen[m.k]) return; seen[m.k] = 1; }
     var other = cur.lead && m.lead && m.lead !== cur.lead;   // a message about some other walk
     if (m.type === 'rcn-walk-done') {          // the last step has been read
-      if (cur.state === 'rec' && !other) { clearTimeout(cur.tail); cur.tail = setTimeout(function () { stop(false); }, TAIL); }
+      if (cur.state === 'rec' && !other) { var more = cur.k + 1 < cur.q.length; later(more ? 'next' : 'end', more ? GAP : TAIL); }
       return;
     }
-    if (m.end) { if (cur.state === 'rec' && !other) stop(false); return; }   // the walk was closed
+    if (m.end) {                               // a walk was closed
+      if (cur.state === 'rec' && !other && Date.now() > cur.hold) stop(false);
+      return;
+    }
     cur.lead = m.lead || cur.lead;             // the walk leading now is the one being recorded
+    if (m.label) cur.step = String(m.label);
     if (!cur.name && m.label) cur.name = String(m.label).split(' — step ')[0];
-    if (cur.state === 'armed') go();
-    else if (cur.tail) { clearTimeout(cur.tail); cur.tail = null; }  // went back a step after the end: keep going
+    if (cur.state === 'armed') { if (cur.k < 0) cur.k = 0; go(); }
+    else if (cur.after) { clearTimeout(cur.timer); cur.after = null; }  // went back a step after the end: keep going
+    draw();
   }
   window.addEventListener('rcn-walk-local', function (ev) { hear(ev.detail); });
   window.addEventListener('message', function (ev) { if (ev.origin === location.origin || ev.origin === 'null') hear(ev.data); });
   if ('BroadcastChannel' in window) try { new BroadcastChannel('rcn-follow').addEventListener('message', function (ev) { hear(ev.data); }); } catch (e) {}
-  window.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && cur && cur.state === 'armed') stop(true); });
+  window.addEventListener('keydown', function (ev) { if (ev.key === 'Escape' && cur && cur.state === 'armed' && !cur.ctl) stop(true); });
   window.addEventListener('pagehide', function () { if (cur) stop(false); });
 })();
   // END rcn-record
@@ -1356,6 +1609,16 @@
       if (id) followNode(id)
       else if (RL && elG.rcnClicked) RL.click(elG, 'sketch', { clear: true })
     })
+    // The walks, for ● Video (tools/rcn-record.js): it lists the walks of every
+    // item on the lineup that has one, so several can be recorded in one video.
+    elG.rcnWalks = {
+      label: 'Drawing',
+      list: () => (graphModel(item) ? walkList(graphModel(item)) : []).map((w, i) => w.name || 'Walk ' + (i + 1)),
+      start: i => { $item.find('.walk-pick').val(String(i)); $item.find('.walk-start').trigger('click') },
+      pause: () => { if (wk.playing) walkToggle() },
+      resume: again => { if (wk.w === null || wk.playing) return; if (again) wk.heard = null; walkToggle() },
+      playing: () => !!wk.playing
+    }
     $item.off('.rcnwalk')
     $item.on('click.rcnwalk', '.walk-start', () => {
       const g = graphModel(item)
@@ -1372,9 +1635,10 @@
     // picture is this item's page, or the whole lineup when other items follow.
     $item.on('click.rcnwalk', '.walk-video', e => {
       e.stopPropagation()
-      const ws = (graphModel(item) ? walkList(graphModel(item)) : []), i = +($item.find('.walk-pick').val() || 0)
-      window.RCNRecord.cropEl = () => (RL && RL.others(elG)) ? document.querySelector('.main') : ($item.closest('.page')[0] || null)
-      window.RCNRecord.open(() => $item.find('.walk-start').trigger('click'), (ws[i] || {}).name)
+      const R = window.RCNRecord, i = +($item.find('.walk-pick').val() || 0)
+      const crop = () => (RL && RL.others(elG)) ? document.querySelector('.main') : ($item.closest('.page')[0] || null)
+      if (R.choose) R.choose({ walks: elG.rcnWalks, walk: i, crop })   // an older copy of rcn-record.js may be serving the page
+      else { const ws = (graphModel(item) ? walkList(graphModel(item)) : []); R.cropEl = crop; R.open(() => $item.find('.walk-start').trigger('click'), (ws[i] || {}).name) }
     })
     $item.on('click.rcnwalk', '.walk-prev', () => walkShow(wk.i - 1))
     $item.on('click.rcnwalk', '.walk-next', () => walkShow(wk.i + 1))
